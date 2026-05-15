@@ -45,7 +45,7 @@ def build_artifact_store(ctx: Any) -> LocalArtifactStore:
     """
     artifacts_path = Path(ctx.app.artifacts_path).expanduser().resolve()
     artifacts_path.mkdir(parents=True, exist_ok=True)
-    return LocalArtifactStore(root=artifacts_path)
+    return LocalArtifactStore(base_dir=artifacts_path)
 
 
 def write_result(

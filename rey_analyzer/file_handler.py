@@ -148,7 +148,7 @@ def _move(file_path: Path, dest_dir: Path, stage: str) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / file_path.name
     try:
-        move_file(file_path, dest)
+        move_file(file_path, dest_dir)
         _logger.debug("moved %s → %s", file_path.name, stage)
         return dest
     except Exception as exc:

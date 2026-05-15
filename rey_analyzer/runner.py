@@ -36,6 +36,7 @@ from rey_analyzer.error_utils import (
     ConfigurationError,
     SourceError,
 )
+from rey_analyzer.preprocessor import build_incident_packet
 from rey_analyzer.file_handler import (
     discover_inbox_files,
     move_to_failed,
@@ -190,7 +191,7 @@ def run_analysis(
     try:
         llm_profile  = _resolve_llm_profile(ctx, request.llm_profile_name)
         analyzer     = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
-        source       = _build_data_source(source_cfg.input_type, processing)
+        source       = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
         result       = analyzer.analyze(source, analysis_id=request.request_id)
 
         write_result(request, result, source_cfg)
@@ -240,7 +241,11 @@ def _build_analyzer(
     )
 
 
-def _build_data_source(input_type: str, file_path: Path) -> DataSource:
+def _build_data_source(
+    input_type:   str,
+    file_path:    Path,
+    analysis_cfg: Any = None,
+) -> DataSource:
     """
     Construct the appropriate DataSource for the given input_type.
 
@@ -251,6 +256,9 @@ def _build_data_source(input_type: str, file_path: Path) -> DataSource:
         csv_file, excel_file.
     file_path : Path
         Absolute path to the file to read.
+    analysis_cfg : Any, optional
+        Analysis config Namespace. When present and input_type is
+        'jsonl_file', applies analysis_cfg.input.include_levels filtering.
 
     Returns
     -------
@@ -262,6 +270,12 @@ def _build_data_source(input_type: str, file_path: Path) -> DataSource:
     SourceError
         If input_type is not recognised.
     """
+    if input_type == "jsonl_file" and analysis_cfg is not None:
+        input_cfg = getattr(analysis_cfg, "input", None)
+        if input_cfg is not None:
+            text = build_incident_packet(file_path, input_cfg)
+            return TextDataSource(text=text, ref=file_path.name)
+
     if input_type in _TEXT_INPUT_TYPES:
         try:
             text = file_path.read_text(encoding="utf-8")
