@@ -22,15 +22,16 @@ build_incident_packet    Convert a JSONL file to a compact incident packet strin
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 from typing import Any
+
+from rey_lib.logs.log_utils import get_logger
 
 from rey_analyzer.error_utils import SourceError
 
 __all__ = ["build_incident_packet"]
 
-_logger = logging.getLogger(__name__)
+_logger = get_logger(__name__)
 
 # Fields treated as stack traces for width limiting.
 _STACK_FIELDS: frozenset[str] = frozenset({"exception", "stack_trace", "traceback"})

@@ -15,18 +15,18 @@ write_result            Write result artifacts for a completed analysis.
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
+from rey_lib.logs.log_utils import get_logger
 
 from rey_analyzer.requests import AnalysisRequest
 
 __all__ = ["build_artifact_store", "write_result"]
 
-_logger = logging.getLogger(__name__)
+_logger = get_logger(__name__)
 
 
 def build_artifact_store(ctx: Any) -> LocalArtifactStore:

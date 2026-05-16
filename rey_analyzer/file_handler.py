@@ -18,11 +18,11 @@ move_to_failed          Move a failed file to failed_path.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
 from rey_lib.files.file_utils import input_files, move_file
+from rey_lib.logs.log_utils import get_logger
 
 from rey_analyzer.error_utils import FileMovementError
 
@@ -33,7 +33,7 @@ __all__ = [
     "move_to_failed",
 ]
 
-_logger = logging.getLogger(__name__)
+_logger = get_logger(__name__)
 
 
 def discover_inbox_files(source_cfg: Any) -> list[Path]:

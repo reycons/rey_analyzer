@@ -17,12 +17,12 @@ run_analysis   Process a single file through a single analysis config.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
+from rey_lib.logs.log_utils import get_logger
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.datasource import (
     CSVDataSource,
@@ -48,7 +48,7 @@ from rey_analyzer.results import build_artifact_store, write_result
 
 __all__ = ["run_all", "run_source", "run_analysis"]
 
-_logger = logging.getLogger(__name__)
+_logger = get_logger(__name__)
 
 # Maps input_type config values to DataSource construction strategies.
 # Text-like formats are all passed as raw text — the LLM reads them as-is.
