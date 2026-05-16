@@ -20,12 +20,15 @@ Usage
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv()
+
+_config_dir_env = os.environ.get("APP_CONFIG_DIR")
+load_dotenv(Path(_config_dir_env).expanduser() / ".env" if _config_dir_env else None)
 
 from rey_lib.config.config_utils import build_ctx
 from rey_lib.config.ctx import find_in_ctx
