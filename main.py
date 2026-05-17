@@ -25,23 +25,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from dotenv import load_dotenv
+# Pre-parse --config-path / --config-dir and call load_dotenv before other imports.
+from rey_lib.config.cli import preparse_config_args
+preparse_config_args()
 
-# Pre-parse --config-dir before load_dotenv so the caller can point to a
-# different config directory without setting APP_CONFIG_DIR in the environment.
-_pre = argparse.ArgumentParser(add_help=False)
-_pre.add_argument("--config-path", dest="config_path", default=None)
-_pre.add_argument("--config-dir",  dest="config_dir",  default=None)
-_pre_args, _ = _pre.parse_known_args()
-
-_config_dir_env = (
-    str(Path(_pre_args.config_path).expanduser().parent) if _pre_args.config_path
-    else _pre_args.config_dir
-    or os.environ.get("APP_CONFIG_DIR")
-)
-load_dotenv(Path(_config_dir_env).expanduser() / ".env" if _config_dir_env else None)
-
-from rey_lib.config.config_utils import build_ctx, build_ctx_from_path
+from rey_lib.config.bootstrap import build_ctx_for_app
+from rey_lib.config.cli import add_config_args, apply_env_overrides
+from rey_lib.config.config_utils import build_ctx
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
@@ -62,11 +52,12 @@ _VALID_ENVS   = frozenset({"dev", "prod"})
 def main() -> int:
     """Parse CLI arguments, build ctx, and dispatch to the requested command."""
     args = _parse_args()
-    _apply_env_overrides(args.env_overrides)
+    apply_env_overrides(args.env_overrides)
 
     if args.config_path:
-        ctx = build_ctx_from_path(
-            Path(args.config_path).expanduser().resolve(),
+        ctx = build_ctx_for_app(
+            installation_config_path=Path(args.config_path),
+            app_name="rey_analyzer",
             project_root=_PROJECT_ROOT,
         )
     else:
@@ -80,7 +71,7 @@ def main() -> int:
 
     setup_logging(ctx, operation=args.command)
     log = get_logger(__name__)
-    log.info("rey_analyzer starting — env=%s command=%s", args.env, args.command)
+    log.info("rey_analyzer starting — env=%s command=%s", ctx.env, args.command)
 
     try:
         if args.command == "run":
@@ -212,36 +203,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="rey_analyzer — contract-driven analysis orchestrator"
     )
-    parser.add_argument(
-        "--env",
-        required=False,
-        default=None,
-        choices=sorted(_VALID_ENVS),
-        help="Target environment. Required when --config-path is not provided.",
-    )
-    parser.add_argument(
-        "--config-path",
-        dest="config_path",
-        default=None,
-        help=(
-            "Path to the app config file (e.g. config.dev.yaml). "
-            "Derives env from filename; supersedes --env and --config-dir."
-        ),
-    )
-    parser.add_argument(
-        "--config-dir",
-        dest="config_dir",
-        default=None,
-        help="Path to the config directory (overrides APP_CONFIG_DIR).",
-    )
-    parser.add_argument(
-        "--set",
-        action="append",
-        metavar="KEY=VALUE",
-        dest="env_overrides",
-        default=[],
-        help="Override a .env variable for this run (repeatable): --set KEY=VALUE",
-    )
+    add_config_args(parser)
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -270,15 +232,6 @@ def _parse_args() -> argparse.Namespace:
     p_reject.add_argument("--reviewer", default="")
 
     return parser.parse_args()
-
-
-def _apply_env_overrides(overrides: list[str]) -> None:
-    """Write --set KEY=VALUE pairs into os.environ before build_ctx reads them."""
-    for item in overrides:
-        if "=" not in item:
-            raise SystemExit(f"--set requires KEY=VALUE format, got: {item!r}")
-        key, _, value = item.partition("=")
-        os.environ[key.strip()] = value
 
 
 # ---------------------------------------------------------------------------
