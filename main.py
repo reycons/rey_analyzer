@@ -51,6 +51,7 @@ _VALID_ENVS   = frozenset({"dev", "prod"})
 def main() -> int:
     """Parse CLI arguments, build ctx, and dispatch to the requested command."""
     args = _parse_args()
+    _apply_env_overrides(args.env_overrides)
 
     ctx = build_ctx(env=args.env, project_root=_PROJECT_ROOT)
 
@@ -197,6 +198,14 @@ def _parse_args() -> argparse.Namespace:
         choices=sorted(_VALID_ENVS),
         help="Target environment.",
     )
+    parser.add_argument(
+        "--set",
+        action="append",
+        metavar="KEY=VALUE",
+        dest="env_overrides",
+        default=[],
+        help="Override a .env variable for this run (repeatable): --set KEY=VALUE",
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -225,6 +234,15 @@ def _parse_args() -> argparse.Namespace:
     p_reject.add_argument("--reviewer", default="")
 
     return parser.parse_args()
+
+
+def _apply_env_overrides(overrides: list[str]) -> None:
+    """Write --set KEY=VALUE pairs into os.environ before build_ctx reads them."""
+    for item in overrides:
+        if "=" not in item:
+            raise SystemExit(f"--set requires KEY=VALUE format, got: {item!r}")
+        key, _, value = item.partition("=")
+        os.environ[key.strip()] = value
 
 
 # ---------------------------------------------------------------------------
