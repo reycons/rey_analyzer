@@ -30,16 +30,18 @@ from dotenv import load_dotenv
 # Pre-parse --config-dir before load_dotenv so the caller can point to a
 # different config directory without setting APP_CONFIG_DIR in the environment.
 _pre = argparse.ArgumentParser(add_help=False)
-_pre.add_argument("--config-dir", dest="config_dir", default=None)
+_pre.add_argument("--config-path", dest="config_path", default=None)
+_pre.add_argument("--config-dir",  dest="config_dir",  default=None)
 _pre_args, _ = _pre.parse_known_args()
 
 _config_dir_env = (
-    _pre_args.config_dir
+    str(Path(_pre_args.config_path).expanduser().parent) if _pre_args.config_path
+    else _pre_args.config_dir
     or os.environ.get("APP_CONFIG_DIR")
 )
 load_dotenv(Path(_config_dir_env).expanduser() / ".env" if _config_dir_env else None)
 
-from rey_lib.config.config_utils import build_ctx
+from rey_lib.config.config_utils import build_ctx, build_ctx_from_path
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
@@ -62,8 +64,16 @@ def main() -> int:
     args = _parse_args()
     _apply_env_overrides(args.env_overrides)
 
-    config_dir = Path(args.config_dir).expanduser().resolve() if args.config_dir else None
-    ctx = build_ctx(env=args.env, project_root=_PROJECT_ROOT, config_dir=config_dir)
+    if args.config_path:
+        ctx = build_ctx_from_path(
+            Path(args.config_path).expanduser().resolve(),
+            project_root=_PROJECT_ROOT,
+        )
+    else:
+        if not args.env:
+            raise SystemExit("--env is required when --config-path is not provided.")
+        config_dir = Path(args.config_dir).expanduser().resolve() if args.config_dir else None
+        ctx = build_ctx(env=args.env, project_root=_PROJECT_ROOT, config_dir=config_dir)
 
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
@@ -204,9 +214,19 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--env",
-        required=True,
+        required=False,
+        default=None,
         choices=sorted(_VALID_ENVS),
-        help="Target environment.",
+        help="Target environment. Required when --config-path is not provided.",
+    )
+    parser.add_argument(
+        "--config-path",
+        dest="config_path",
+        default=None,
+        help=(
+            "Path to the app config file (e.g. config.dev.yaml). "
+            "Derives env from filename; supersedes --env and --config-dir."
+        ),
     )
     parser.add_argument(
         "--config-dir",
