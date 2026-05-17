@@ -20,7 +20,7 @@ from typing import Any
 
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
-from rey_lib.logs.log_utils import get_logger
+from rey_lib.logs import get_logger
 
 from rey_analyzer.requests import AnalysisRequest
 

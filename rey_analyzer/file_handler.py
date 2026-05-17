@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from rey_lib.files.file_utils import input_files, move_file
-from rey_lib.logs.log_utils import get_logger
+from rey_lib.logs import get_logger
 
 from rey_analyzer.error_utils import FileMovementError
 

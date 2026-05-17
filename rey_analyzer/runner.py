@@ -22,7 +22,7 @@ from typing import Any
 
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
-from rey_lib.logs.log_utils import get_logger
+from rey_lib.logs import get_logger
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.datasource import (
     CSVDataSource,

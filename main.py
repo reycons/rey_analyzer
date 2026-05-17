@@ -33,7 +33,7 @@ load_dotenv(Path(_config_dir_env).expanduser() / ".env" if _config_dir_env else 
 from rey_lib.config.config_utils import build_ctx
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
-from rey_lib.logs.log_utils import get_logger, setup_logging
+from rey_lib.logs import get_logger, setup_logging
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
 from rey_analyzer.runner import run_all, run_analysis, run_source
