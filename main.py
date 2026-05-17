@@ -27,7 +27,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-_config_dir_env = os.environ.get("APP_CONFIG_DIR")
+# Pre-parse --config-dir before load_dotenv so the caller can point to a
+# different config directory without setting APP_CONFIG_DIR in the environment.
+_pre = argparse.ArgumentParser(add_help=False)
+_pre.add_argument("--config-dir", dest="config_dir", default=None)
+_pre_args, _ = _pre.parse_known_args()
+
+_config_dir_env = (
+    _pre_args.config_dir
+    or os.environ.get("APP_CONFIG_DIR")
+)
 load_dotenv(Path(_config_dir_env).expanduser() / ".env" if _config_dir_env else None)
 
 from rey_lib.config.config_utils import build_ctx
@@ -53,7 +62,8 @@ def main() -> int:
     args = _parse_args()
     _apply_env_overrides(args.env_overrides)
 
-    ctx = build_ctx(env=args.env, project_root=_PROJECT_ROOT)
+    config_dir = Path(args.config_dir).expanduser().resolve() if args.config_dir else None
+    ctx = build_ctx(env=args.env, project_root=_PROJECT_ROOT, config_dir=config_dir)
 
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
@@ -197,6 +207,12 @@ def _parse_args() -> argparse.Namespace:
         required=True,
         choices=sorted(_VALID_ENVS),
         help="Target environment.",
+    )
+    parser.add_argument(
+        "--config-dir",
+        dest="config_dir",
+        default=None,
+        help="Path to the config directory (overrides APP_CONFIG_DIR).",
     )
     parser.add_argument(
         "--set",
