@@ -1,0 +1,5 @@
+{
+  "config_dirs": ["analysis_configs", "data_sources", "llm_configs", "contracts", "schemas"],
+  "default_files": [],
+  "pip_editable": false
+}
