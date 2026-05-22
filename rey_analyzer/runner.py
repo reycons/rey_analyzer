@@ -185,7 +185,7 @@ def run_analysis(
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
 
-    request     = build_request(source_cfg, analysis_cfg, file_path)
+    request     = build_request(source_cfg, analysis_cfg, file_path, ctx=ctx)
     processing  = move_to_processing(file_path, source_cfg)
 
     try:

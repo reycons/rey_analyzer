@@ -89,6 +89,7 @@ def build_request(
     source_cfg:   Any,
     analysis_cfg: Any,
     file_path:    Path,
+    ctx:          Any = None,
 ) -> AnalysisRequest:
     """
     Construct an AnalysisRequest from config objects and the target file.
@@ -104,6 +105,10 @@ def build_request(
         Analysis config Namespace (from ctx.analysis_configs).
     file_path : Path
         Absolute path to the file to be analyzed (in inbox or processing).
+    ctx : Any, optional
+        Application context. When provided, ``ctx.contracts_root`` is used
+        as the base directory for resolving relative contract paths. Falls
+        back to the app project root when absent or when the path is absolute.
 
     Returns
     -------
@@ -125,7 +130,8 @@ def build_request(
     except OSError as exc:
         raise SourceError(f"Cannot read input file: {file_path}") from exc
 
-    contract_path = _resolve_path(getattr(analysis_cfg, "contract", None), "contract")
+    contracts_root = _contracts_root(ctx)
+    contract_path  = _resolve_path(getattr(analysis_cfg, "contract", None), "contract", contracts_root)
     try:
         contract      = load_analysis_contract(contract_path)
         contract_hash = contract.hash
@@ -137,7 +143,7 @@ def build_request(
     schema_file = getattr(analysis_cfg, "schema", None)
     schema_hash = ""
     if schema_file:
-        schema_path = _resolve_path(schema_file, "schema")
+        schema_path = _resolve_path(schema_file, "schema", contracts_root)
         try:
             schema_hash = _hash_bytes(schema_path.read_bytes())
         except OSError as exc:
@@ -182,8 +188,28 @@ def _compute_request_id(
     return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 
-def _resolve_path(relative: str | None, label: str) -> Path:
-    """Resolve a config-relative path against the project root."""
+def _contracts_root(ctx: Any) -> Path:
+    """Return the base directory for resolving contract paths.
+
+    Priority: ``ctx.contracts_root`` (configured per installation) →
+    ``_PROJECT_ROOT`` (app directory fallback).
+    """
+    if ctx is not None:
+        root = getattr(ctx, "contracts_root", None)
+        if root:
+            return Path(str(root)).expanduser().resolve()
+    return _PROJECT_ROOT
+
+
+def _resolve_path(relative: str | None, label: str, base: Path) -> Path:
+    """Resolve a contract or schema path against base.
+
+    Absolute paths are returned as-is. Relative paths are resolved
+    against base.
+    """
     if not relative:
         raise ConfigurationError(f"analysis_config.{label} is not set.")
-    return (_PROJECT_ROOT / relative).resolve()
+    p = Path(relative)
+    if p.is_absolute():
+        return p.resolve()
+    return (base / relative).resolve()
