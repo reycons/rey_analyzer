@@ -104,7 +104,7 @@ def write_result(
         request.run_id, result.status, run_dir,
     )
 
-    if analysis_cfg is not None:
+    if result.status == "success" and analysis_cfg is not None:
         output_cfg = getattr(analysis_cfg, "output", None)
         if output_cfg is not None and getattr(output_cfg, "write_raw", False):
             _write_raw_output(request, result, source_cfg)
@@ -129,7 +129,7 @@ def _write_raw_output(
     stem = Path(Path(request.file_path).stem).stem
     raw_file = raw_dir / f"{stem}.yaml"
 
-    raw_text = result.data if isinstance(result.data, str) else ""
+    raw_text = result.raw_text or ""
     raw_file.write_text(raw_text, encoding="utf-8")
 
     _logger.info("raw output written: %s", raw_file)
