@@ -1,0 +1,334 @@
+# =============================================================================
+# REY ANALYZER — Configuration Reference
+#
+# Documents every available setting across all rey_analyzer config files.
+# Values shown are examples or defaults. This file is never loaded by the app.
+# =============================================================================
+
+# Config file names used by this app:
+#   app.yaml
+#   config.dev.yaml
+#   config.test.yaml
+#   config.prod.yaml
+#   data_sources/data_source.{name}.yaml
+#   app/analysis_configs.yaml
+#   app/llm_configs.yaml
+
+
+# =============================================================================
+# FILE: app.yaml
+#
+# App registry metadata. Loaded by installation tooling.
+# =============================================================================
+
+name: rey_analyzer
+# Required. Must be rey_analyzer.
+
+enabled: true
+# Options: true, false.
+
+version: v01
+# Informational version label.
+
+
+# =============================================================================
+# FILE: config.{env}.yaml
+#
+# Main app config. One per environment (dev, test, prod).
+# Loaded via --env <env> or via --config-path pointing to the installation
+# config, which resolves to this file through its apps.rey_analyzer.config_path
+# entry. The env is derived from the filename: config.<env>.yaml.
+# =============================================================================
+
+# Base directory for resolving relative contract paths in analysis_configs.yaml.
+# Absolute contract paths bypass this setting entirely.
+contracts_root: ~/installations/ccc/llm_contracts/v01
+
+# Log file path. {operation} = CLI command, {timestamp} = run timestamp.
+log_path: ~/logs/rey_analyzer/rey_analyzer.{operation}.{timestamp}.log
+
+# JSONL log file path. {operation} = CLI command, {timestamp} = run timestamp.
+jsonl_path: ~/logs/rey_analyzer/rey_analyzer.{operation}.{timestamp}.jsonl
+
+jsonl_ctx_fields:
+  - source_name
+  - analysis_name
+  - current_file
+# Optional list of ctx fields included in JSONL log records.
+
+env:
+  - name: openai_api_key
+    env_var: OPENAI_API_KEY
+    generate: false
+  - name: anthropic_api_key
+    env_var: ANTHROPIC_API_KEY
+    generate: false
+# Optional environment declarations consumed by rey_lib config tooling.
+# generate options: true, false.
+
+app:
+  # Where execution records (result.json) are written, one subfolder per run_id.
+  records_path:   ~/data/rey_analyzer/records
+
+  # Where LLM artifact files are stored (raw LLM responses, etc.)
+  artifacts_path: ~/data/rey_analyzer/artifacts
+
+runtime:
+  # Stop processing all remaining data sources if any source raises an error.
+  # Default: false
+  stop_on_error: false
+
+  # Global cap on files processed per run. Per-source max_files_per_run
+  # is applied first; the lower of the two values wins.
+  # Default: 100
+  max_files_per_run: 100
+
+
+# =============================================================================
+# FILE: data_sources/data_source.{name}.yaml
+#
+# One file per data source. All files in the data_sources/ directory are
+# merged at load time. Each file may define one or more entries under the
+# data_sources: key.
+# =============================================================================
+
+data_sources:
+
+  - name:              my_source
+    # Required. Unique identifier. Referenced by analysis_config and by
+    # the CLI: python main.py --config-path ... run-source --source my_source
+
+    enabled:           true
+    # Set false to skip this source on every run without deleting the config.
+    # Default: true
+
+    input_type:        text_file
+    # Format of the input files. Controls how content is passed to the LLM.
+    # Options:
+    #   text_file     — file content read as plain text, sent as-is
+    #   json_file     — file content read as plain text (no parsing)
+    #   jsonl_file    — JSONL lines read as text; supports include_levels /
+    #                   include_fields filters in the analysis_config input block
+    #   markdown_file — file content read as plain text
+    #   csv_file      — parsed into rows and columns; sent as a markdown table
+    #   excel_file    — parsed into rows and columns; sent as a markdown table
+
+    file_pattern:      "*.json"
+    # Glob pattern matched against inbox_path files.
+    # Default: "*"
+
+    analysis_config:   my_analysis
+    # Name of the analysis_config entry to apply. Required.
+    # Must match an entry in app/analysis_configs.yaml.
+
+    move_files:        true
+    # When true (default), files are moved through the pipeline:
+    #   inbox_path → processing_path → success_path or failed_path
+    # Set false when multiple data sources share the same inbox (e.g., three
+    # DDL-generation steps all reading the same loader YAML). Files stay in
+    # inbox_path throughout and are never moved. processing_path, success_path,
+    # and failed_path are not required when move_files: false.
+    # Default: true
+
+    raw_output_extension: .yaml
+    # File extension used when writing raw LLM output to raw_output_path.
+    # Only relevant when the associated analysis_config has write_raw: true.
+    # Default: .yaml
+    # Use .sql for DDL/view contracts.
+
+    max_files_per_run: 25
+    # Maximum files processed per run for this source. Capped further by
+    # runtime.max_files_per_run (the lower value wins).
+    # Default: 100
+
+    paths:
+      inbox_path:      ~/data/inbox
+      # Directory scanned for input files. Created on first run if missing.
+      # Required always.
+
+      processing_path: ~/data/processing
+      # Files move here while being analyzed, preventing double-processing
+      # if the app is restarted mid-run. Required when move_files: true.
+
+      success_path:    ~/data/success
+      # Files move here after a successful analysis run.
+      # Required when move_files: true.
+
+      failed_path:     ~/data/failed
+      # Files move here after a failed analysis run or uncaught exception.
+      # Required when move_files: true.
+
+      results_path:    ~/data/results
+      # Where result.json records are written, one subfolder per run_id.
+      # Required always.
+
+      raw_output_path: ~/data/raw_output
+      # Where raw LLM output is written as a file.
+      # File is named: {input_file_stem}{raw_output_extension}
+      # Required when analysis_config.output.write_raw: true.
+
+# Known configured data source names in the current ccc test/development
+# install trees:
+#   file_profile_to_loader_config
+#   fo_final_ddl
+#   fo_profile_to_loader
+#   fo_staging_ddl
+#   fo_staging_view
+#   loader_config_to_final_ddl
+#   loader_config_to_staging_ddl
+#   loader_config_to_staging_view
+#   rey_loader_logs
+
+
+# =============================================================================
+# FILE: app/analysis_configs.yaml
+#
+# Named analysis job definitions. Data sources reference these by name.
+# All entries are listed under the analysis_configs: key.
+# =============================================================================
+
+analysis_configs:
+
+  - name:              my_analysis
+    # Required. Must match analysis_config in one or more data_source entries.
+
+    contract:          path/to/contract.v01.md
+    # Path to the LLM contract markdown file.
+    # Relative paths resolve from config.yaml contracts_root.
+    # Absolute paths are used as-is. Required.
+
+    schema:            path/to/schema.json
+    # Optional JSON Schema to validate LLM JSON output against.
+    # Relative paths resolve from contracts_root.
+    # Omit to skip schema validation.
+
+    llm_profile:       primary
+    # Name of the llm_profile to use from app/llm_configs.yaml.
+    # Default: primary
+
+    idempotency_mode:  reuse_success
+    # Controls behavior when the same input file + contract have been seen before.
+    # Options:
+    #   reuse_success  — reuse the previous successful result; skip the LLM call (default)
+    #   rerun_always   — always call the LLM regardless of prior history
+    #   fail_if_exists — raise an error if any prior result exists for this input
+
+    requires_approval: false
+    # When true, successful results are stored as pending_approval.
+    # The file stays in processing_path until a human approves via:
+    #   python main.py ... approve --run-id <run_id>
+    # Default: false
+
+    input:
+      source_type: any
+      # Expected data origin. Informational — used by the preparation pipeline.
+      # Options: any, text, sql, csv, excel
+      # Default: any
+
+      max_chars:   100000
+      # Maximum characters sent to the LLM for text-based input types
+      # (text_file, json_file, jsonl_file, markdown_file).
+      # Content is truncated at this limit before being sent.
+
+      max_rows:    200
+      # Maximum rows included when the source is tabular (csv_file, excel_file).
+      # Default: 200
+
+      # -----------------------------------------------------------------------
+      # JSONL-specific settings — only apply when input_type: jsonl_file
+      # -----------------------------------------------------------------------
+
+      include_levels:
+        # Only include log entries at these severity levels. Omit to include all.
+        - ERROR
+        - WARNING
+        - CRITICAL
+
+      include_fields:
+        # Only include these fields from each log entry. Omit to include all fields.
+        - timestamp
+        - level
+        - message
+        - exception
+
+      max_message_chars:      1000
+      # Truncate each log message field to this many characters.
+
+      max_stack_chars:        3000
+      # Truncate stack trace / exception fields to this many characters.
+
+      max_sql_chars:          3000
+      # Truncate SQL statement fields to this many characters.
+
+      max_ctx_field_chars:    500
+      # Truncate individual context dump fields to this many characters.
+
+      max_examples_per_group: 3
+      # Maximum log entries shown per error group when grouping is applied.
+
+    output:
+      write_json:             true
+      # Write result.data (the parsed JSON from the LLM) as an artifact file.
+      # Default: true
+
+      write_markdown:         true
+      # Write the result as a formatted markdown file.
+      # Default: true
+
+      write_execution_record: true
+      # Write the execution metadata record (timings, hashes, token counts).
+      # Default: true
+
+      write_raw:              false
+      # Write the raw LLM text output to raw_output_path as a file.
+      # The file extension is set by data_source.raw_output_extension.
+      # Required when chaining pipeline steps (e.g., step 1 output feeds step 2 inbox).
+      # Only written on success — never on failure.
+      # Default: false
+
+# Known configured analysis names in the current ccc install trees:
+#   generic_file_summary
+#   etl_log_failure
+#   file_profile_to_loader_config
+#   loader_config_to_staging_ddl
+#   loader_config_to_staging_view
+#   loader_config_to_final_ddl
+
+
+# =============================================================================
+# FILE: app/llm_configs.yaml
+#
+# Named LLM provider profiles. Analysis configs reference these by name.
+# All entries listed under the llm_profiles: key.
+# =============================================================================
+
+llm_profiles:
+
+  - name:     primary
+    # Profile name. Referenced by analysis_configs.llm_profile. Required.
+
+    provider:  openai
+    # LLM provider. Options:
+    #   openai     — OpenAI API (requires OPENAI_API_KEY)
+    #   anthropic  — Anthropic API (requires ANTHROPIC_API_KEY)
+    #   ollama     — Local Ollama server (no API key required)
+    #   mock       — Returns canned responses; use for testing without API calls
+
+    model:     gpt-4o
+    # Model identifier passed to the provider.
+    # OpenAI:    gpt-4o, gpt-4-turbo, gpt-4, gpt-3.5-turbo
+    # Anthropic: claude-sonnet-4-6, claude-opus-4-7, claude-haiku-4-5-20251001
+    # Ollama:    llama3, mistral, phi3, etc. (must be pulled locally)
+    # mock:      any string
+
+    api_key:   env.OPENAI_API_KEY
+    # API key source.
+    # env.VAR_NAME  — reads the value from environment variable VAR_NAME
+    # ""            — no key required (ollama, mock)
+    # Direct string values work but are not recommended (use .env instead)
+
+    temperature: 0
+    # Optional provider setting when supported.
+
+    timeout_seconds: 120
+    # Optional provider timeout.
