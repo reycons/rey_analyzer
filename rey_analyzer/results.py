@@ -93,6 +93,7 @@ def write_result(
         "idempotency_mode": request.idempotency_mode,
         "status":          result.status,
         "data":            result.data,
+        "raw_text":        getattr(result, "raw_text", None),
         "errors":          result.errors,
     }
 
