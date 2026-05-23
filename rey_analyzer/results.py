@@ -128,7 +128,8 @@ def _write_raw_output(
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     stem = Path(Path(request.file_path).stem).stem
-    raw_file = raw_dir / f"{stem}.yaml"
+    ext  = getattr(source_cfg, "raw_output_extension", ".yaml")
+    raw_file = raw_dir / f"{stem}{ext}"
 
     raw_text = result.raw_text or ""
     raw_file.write_text(raw_text, encoding="utf-8")
