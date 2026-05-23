@@ -185,16 +185,18 @@ def run_analysis(
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
 
-    request     = build_request(source_cfg, analysis_cfg, file_path, ctx=ctx)
-    processing  = move_to_processing(file_path, source_cfg)
+    move_files = getattr(source_cfg, "move_files", True)
+
+    request    = build_request(source_cfg, analysis_cfg, file_path, ctx=ctx)
+    processing = move_to_processing(file_path, source_cfg) if move_files else file_path
 
     try:
-        llm_profile  = _resolve_llm_profile(ctx, request.llm_profile_name)
-        analyzer     = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
-        source       = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
-        result       = analyzer.analyze(source, analysis_id=request.request_id)
+        llm_profile = _resolve_llm_profile(ctx, request.llm_profile_name)
+        analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
+        source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
+        result      = analyzer.analyze(source, analysis_id=request.request_id)
 
-        write_result(request, result, source_cfg)
+        write_result(request, result, source_cfg, analysis_cfg)
 
         if result.status == "pending_approval":
             _logger.info(
@@ -204,18 +206,21 @@ def run_analysis(
             return "pending_approval"
 
         if result.status == "success":
-            move_to_success(processing, source_cfg)
+            if move_files:
+                move_to_success(processing, source_cfg)
             return "success"
 
-        move_to_failed(processing, source_cfg)
+        if move_files:
+            move_to_failed(processing, source_cfg)
         return "failed"
 
     except Exception as exc:  # noqa: BLE001
         _logger.error("analysis failed for '%s': %s", file_path.name, exc)
-        try:
-            move_to_failed(processing, source_cfg)
-        except Exception:  # noqa: BLE001
-            _logger.error("could not move '%s' to failed.", file_path.name)
+        if move_files:
+            try:
+                move_to_failed(processing, source_cfg)
+            except Exception:  # noqa: BLE001
+                _logger.error("could not move '%s' to failed.", file_path.name)
         return "failed"
 
 

@@ -210,7 +210,7 @@ def _parse_args() -> argparse.Namespace:
     sub.add_parser("run", help="Process all enabled data sources.")
 
     p_source = sub.add_parser("run-source", help="Process one named data source.")
-    p_source.add_argument("source", help="Data source name.")
+    p_source.add_argument("--source", required=True, dest="source", help="Data source name.")
 
     p_submit = sub.add_parser("submit-file", help="Submit one file for analysis.")
     p_submit.add_argument("--source", required=True, help="Data source name.")

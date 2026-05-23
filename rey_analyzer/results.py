@@ -52,6 +52,7 @@ def write_result(
     request:        AnalysisRequest,
     result:         AnalysisResult,
     source_cfg:     Any,
+    analysis_cfg:   Any = None,
 ) -> Path:
     """
     Write result artifacts to results_path/<run_id>/.
@@ -102,4 +103,33 @@ def write_result(
         "result written: run_id=%s status=%s path=%s",
         request.run_id, result.status, run_dir,
     )
+
+    if analysis_cfg is not None:
+        output_cfg = getattr(analysis_cfg, "output", None)
+        if output_cfg is not None and getattr(output_cfg, "write_raw", False):
+            _write_raw_output(request, result, source_cfg)
+
     return run_dir
+
+
+def _write_raw_output(
+    request:    AnalysisRequest,
+    result:     AnalysisResult,
+    source_cfg: Any,
+) -> None:
+    """Write raw LLM output text to raw_output_path for pipeline chaining."""
+    raw_dir_str = getattr(getattr(source_cfg, "paths", None), "raw_output_path", None)
+    if not raw_dir_str:
+        _logger.warning("write_raw is true but raw_output_path is not configured.")
+        return
+
+    raw_dir = Path(raw_dir_str).expanduser().resolve()
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    stem = Path(Path(request.file_path).stem).stem
+    raw_file = raw_dir / f"{stem}.yaml"
+
+    raw_text = result.data if isinstance(result.data, str) else ""
+    raw_file.write_text(raw_text, encoding="utf-8")
+
+    _logger.info("raw output written: %s", raw_file)
