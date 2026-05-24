@@ -127,7 +127,7 @@ def _write_raw_output(
     raw_dir = Path(raw_dir_str).expanduser().resolve()
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    stem = Path(Path(request.file_path).stem).stem
+    stem = _raw_output_stem(request.file_path)
     ext  = getattr(source_cfg, "raw_output_extension", ".yaml")
     raw_file = raw_dir / f"{stem}{ext}"
 
@@ -135,3 +135,11 @@ def _write_raw_output(
     raw_file.write_text(raw_text, encoding="utf-8")
 
     _logger.info("raw output written: %s", raw_file)
+
+
+def _raw_output_stem(file_path: Path) -> str:
+    """Return output stem, removing only the compound .profile.json suffix."""
+    name = file_path.name
+    if name.endswith(".profile.json"):
+        return name.removesuffix(".profile.json")
+    return file_path.stem
