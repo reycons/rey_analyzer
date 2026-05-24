@@ -60,7 +60,7 @@ _TEXT_INPUT_TYPES = frozenset({
 })
 
 
-def run_all(ctx: Any) -> None:
+def run_all(ctx: Any) -> tuple[int, int, int]:
     """
     Process all enabled data sources defined in ctx.
 
@@ -72,30 +72,42 @@ def run_all(ctx: Any) -> None:
     ----------
     ctx : Any
         Application context built by build_ctx().
+
+    Returns
+    -------
+    tuple[int, int, int]
+        Total counts of (success, failed, pending_approval) files.
     """
     sources = getattr(ctx, "data_sources", []) or []
     if not sources:
         _logger.warning("No data_sources configured — nothing to process.")
-        return
+        return 0, 0, 0
 
     stop_on_error = bool(getattr(getattr(ctx, "runtime", None), "stop_on_error", False))
+    total_success = total_failed = total_pending = 0
 
     for source_cfg in sources:
         if not getattr(source_cfg, "enabled", True):
             _logger.debug("source '%s' disabled — skipping.", source_cfg.name)
             continue
 
-        analysis_cfg = _resolve_analysis_cfg(ctx, source_cfg.analysis_config)
         try:
+            analysis_cfg = _resolve_analysis_cfg(ctx, source_cfg.analysis_config)
             success, failed, pending = run_source(ctx, source_cfg, analysis_cfg)
             _logger.info(
                 "source '%s' complete: success=%d failed=%d pending=%d",
                 source_cfg.name, success, failed, pending,
             )
+            total_success += success
+            total_failed += failed
+            total_pending += pending
         except Exception as exc:  # noqa: BLE001
             _logger.error("source '%s' error: %s", source_cfg.name, exc)
+            total_failed += 1
             if stop_on_error:
                 raise
+
+    return total_success, total_failed, total_pending
 
 
 def run_source(

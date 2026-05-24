@@ -79,6 +79,21 @@ def test_run_source_empty_inbox(
     assert (success, failed, pending) == (0, 0, 0)
 
 
+def test_run_all_returns_failed_count_on_source_exception(
+    sample_ctx: SimpleNamespace,
+    sample_source_cfg: SimpleNamespace,
+) -> None:
+    """run_all includes source-level failures in the returned counts."""
+    from rey_analyzer.runner import run_all
+
+    sample_source_cfg.analysis_config = "missing_config"
+    sample_ctx.data_sources = [sample_source_cfg]
+
+    success, failed, pending = run_all(sample_ctx)
+
+    assert (success, failed, pending) == (0, 1, 0)
+
+
 def test_run_analysis_moves_to_failed_on_exception(
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,

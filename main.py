@@ -75,7 +75,14 @@ def main() -> int:
 
     try:
         if args.command == "run":
-            run_all(ctx)
+            success, failed, pending = run_all(ctx)
+            log.info(
+                "run complete: success=%d failed=%d pending=%d",
+                success, failed, pending,
+            )
+            if failed:
+                log.error("rey_analyzer run failed: %d file(s) failed.", failed)
+                return 1
 
         elif args.command == "run-source":
             source_cfg   = _resolve_source(ctx, args.source)
@@ -85,6 +92,9 @@ def main() -> int:
                 "run-source complete: success=%d failed=%d pending=%d",
                 success, failed, pending,
             )
+            if failed:
+                log.error("run-source failed: %d file(s) failed.", failed)
+                return 1
 
         elif args.command == "submit-file":
             source_cfg   = _resolve_source(ctx, args.source)
@@ -92,6 +102,8 @@ def main() -> int:
             file_path    = Path(args.file).expanduser().resolve()
             status       = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
             log.info("submit-file complete: status=%s", status)
+            if status == "failed":
+                return 1
 
         elif args.command == "analyze-file":
             # analyze-file runs the analysis without moving the file.
@@ -102,6 +114,8 @@ def main() -> int:
                 ctx, source_cfg, analysis_cfg, file_path,
             )
             log.info("analyze-file complete: status=%s", status)
+            if status == "failed":
+                return 1
 
         elif args.command == "status":
             _cmd_status(ctx, args, log)
