@@ -21,6 +21,12 @@ from pathlib import Path
 from typing import Any
 
 from rey_lib.config.ctx import find_in_ctx
+from rey_lib.files.file_utils import (
+    discover_inbox_files,
+    move_to_failed,
+    move_to_processing,
+    move_to_success,
+)
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
 from rey_lib.logs import get_logger
 from rey_lib.llm.artifacts import LocalArtifactStore
@@ -37,12 +43,6 @@ from rey_analyzer.error_utils import (
     SourceError,
 )
 from rey_analyzer.preprocessor import build_incident_packet
-from rey_analyzer.file_handler import (
-    discover_inbox_files,
-    move_to_failed,
-    move_to_processing,
-    move_to_success,
-)
 from rey_analyzer.requests import AnalysisRequest, build_request
 from rey_analyzer.results import build_artifact_store, write_result
 
@@ -187,10 +187,11 @@ def run_analysis(
 
     move_files = getattr(source_cfg, "move_files", True)
 
-    request    = build_request(source_cfg, analysis_cfg, file_path, ctx=ctx)
-    processing = move_to_processing(file_path, source_cfg) if move_files else file_path
-
+    processing = file_path
     try:
+        request    = build_request(source_cfg, analysis_cfg, file_path, ctx=ctx)
+        processing = move_to_processing(file_path, source_cfg) if move_files else file_path
+
         llm_profile = _resolve_llm_profile(ctx, request.llm_profile_name)
         analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
         source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)

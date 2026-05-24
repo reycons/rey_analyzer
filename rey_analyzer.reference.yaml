@@ -114,7 +114,9 @@ data_sources:
     #   excel_file    — parsed into rows and columns; sent as a markdown table
 
     file_pattern:      "*.json"
-    # Glob pattern matched against inbox_path files.
+    # Glob pattern or list of glob patterns matched against inbox_path files.
+    # Date/token placeholders such as {yyyymmdd} are treated as * for discovery.
+    # Examples: "*.json", "*.profile.json", ["*.ps1", "*.tr1"]
     # Default: "*"
 
     analysis_config:   my_analysis
