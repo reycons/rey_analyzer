@@ -26,6 +26,7 @@ from rey_lib.files.file_utils import (
     move_to_failed,
     move_to_processing,
     move_to_success,
+    read_text_file,
 )
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
 from rey_lib.logs import get_logger
@@ -202,7 +203,12 @@ def run_analysis(
     processing = file_path
     try:
         request    = build_request(source_cfg, analysis_cfg, file_path, ctx=ctx)
-        processing = move_to_processing(file_path, source_cfg) if move_files else file_path
+        _move_kwargs = {
+            "state_ctx": ctx,
+            "app": "rey_analyzer",
+            "pipeline": getattr(ctx, "pipeline_name", None),
+        }
+        processing = move_to_processing(file_path, source_cfg, **_move_kwargs) if move_files else file_path
 
         llm_profile = _resolve_llm_profile(ctx, request.llm_profile_name)
         analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
@@ -220,18 +226,18 @@ def run_analysis(
 
         if result.status == "success":
             if move_files:
-                move_to_success(processing, source_cfg)
+                move_to_success(processing, source_cfg, **_move_kwargs)
             return "success"
 
         if move_files:
-            move_to_failed(processing, source_cfg)
+            move_to_failed(processing, source_cfg, **_move_kwargs)
         return "failed"
 
     except Exception as exc:  # noqa: BLE001
         _logger.error("analysis failed for '%s': %s", file_path.name, exc)
         if move_files:
             try:
-                move_to_failed(processing, source_cfg)
+                move_to_failed(processing, source_cfg, state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None))
             except Exception:  # noqa: BLE001
                 _logger.error("could not move '%s' to failed.", file_path.name)
         return "failed"
@@ -296,7 +302,7 @@ def _build_data_source(
 
     if input_type in _TEXT_INPUT_TYPES:
         try:
-            text = file_path.read_text(encoding="utf-8")
+            text = read_text_file(file_path, encoding="utf-8")
         except OSError as exc:
             raise SourceError(f"Cannot read {file_path}: {exc}") from exc
         return TextDataSource(text=text, ref=file_path.name)
