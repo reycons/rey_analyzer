@@ -25,6 +25,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from rey_lib.files.file_utils import read_text_file
 from rey_lib.logs import get_logger
 
 from rey_analyzer.error_utils import SourceError
@@ -80,7 +81,7 @@ def build_incident_packet(file_path: Path, input_cfg: Any) -> str:
     max_examples      = int(getattr(input_cfg, "max_examples_per_group", _DEFAULT_MAX_EXAMPLES))
 
     try:
-        raw_text = file_path.read_text(encoding="utf-8")
+        raw_text = read_text_file(file_path, encoding="utf-8")
     except OSError as exc:
         raise SourceError(f"Cannot read {file_path}: {exc}") from exc
 

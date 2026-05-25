@@ -21,12 +21,12 @@ build_request        Factory: constructs an AnalysisRequest from config and file
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rey_lib.files.file_utils import bytes_sha256, file_sha256
 from rey_lib.llm.analysis import load_analysis_contract
 
 from rey_analyzer.error_utils import ConfigurationError, SourceError
@@ -126,12 +126,16 @@ def build_request(
         raise SourceError(f"Input file not found: {file_path}")
 
     try:
-        input_hash = _hash_bytes(file_path.read_bytes())
+        input_hash = file_sha256(file_path)
     except OSError as exc:
         raise SourceError(f"Cannot read input file: {file_path}") from exc
 
     contracts_root = _contracts_root(ctx)
-    contract_path  = _resolve_path(getattr(analysis_cfg, "contract", None), "contract", contracts_root)
+    contract_path = _resolve_path(
+        getattr(analysis_cfg, "contract", None),
+        "contract",
+        contracts_root,
+    )
     try:
         contract      = load_analysis_contract(contract_path)
         contract_hash = contract.hash
@@ -145,7 +149,7 @@ def build_request(
     if schema_file:
         schema_path = _resolve_path(schema_file, "schema", contracts_root)
         try:
-            schema_hash = _hash_bytes(schema_path.read_bytes())
+            schema_hash = file_sha256(schema_path)
         except OSError as exc:
             raise ConfigurationError(
                 f"Cannot read schema file: {schema_path}"
@@ -173,11 +177,6 @@ def build_request(
 # Private helpers
 # ---------------------------------------------------------------------------
 
-def _hash_bytes(data: bytes) -> str:
-    """Return the SHA-256 hex digest of raw bytes."""
-    return hashlib.sha256(data).hexdigest()
-
-
 def _compute_request_id(
     input_hash:    str,
     contract_hash: str,
@@ -185,7 +184,12 @@ def _compute_request_id(
 ) -> str:
     """Return a 16-char deterministic ID from three content hashes."""
     combined = f"{input_hash}:{contract_hash}:{schema_hash}"
-    return hashlib.sha256(combined.encode()).hexdigest()[:16]
+    return bytes_sha256(combined.encode())[:16]
+
+
+def _hash_bytes(data: bytes) -> str:
+    """Return the shared SHA-256 hex digest for raw bytes."""
+    return bytes_sha256(data)
 
 
 def _contracts_root(ctx: Any) -> Path:
