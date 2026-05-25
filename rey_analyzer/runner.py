@@ -215,7 +215,7 @@ def run_analysis(
         source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
         result      = analyzer.analyze(source, analysis_id=request.request_id)
 
-        write_result(request, result, source_cfg, analysis_cfg)
+        write_result(request, result, source_cfg, analysis_cfg, ctx=ctx)
 
         if result.status == "pending_approval":
             _logger.info(

@@ -14,10 +14,10 @@ write_result            Write result artifacts for a completed analysis.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from rey_lib.files.file_utils import write_file
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
 from rey_lib.logs import get_logger
@@ -53,6 +53,7 @@ def write_result(
     result:         AnalysisResult,
     source_cfg:     Any,
     analysis_cfg:   Any = None,
+    ctx:            Any = None,
 ) -> Path:
     """
     Write result artifacts to results_path/<run_id>/.
@@ -98,7 +99,8 @@ def write_result(
     }
 
     result_file = run_dir / "result.json"
-    result_file.write_text(json.dumps(record, default=str, indent=2), encoding="utf-8")
+    _state = {"state_ctx": ctx, "app": "rey_analyzer", "pipeline": getattr(ctx, "pipeline_name", None) if ctx else None, "reason": "analyzed"}
+    write_file(result_file, record, file_type="JSON", **_state)
 
     _logger.info(
         "result written: run_id=%s status=%s path=%s",
@@ -108,7 +110,7 @@ def write_result(
     if result.status == "success" and analysis_cfg is not None:
         output_cfg = getattr(analysis_cfg, "output", None)
         if output_cfg is not None and getattr(output_cfg, "write_raw", False):
-            _write_raw_output(request, result, source_cfg)
+            _write_raw_output(request, result, source_cfg, ctx=ctx)
 
     return run_dir
 
@@ -117,6 +119,7 @@ def _write_raw_output(
     request:    AnalysisRequest,
     result:     AnalysisResult,
     source_cfg: Any,
+    ctx:        Any = None,
 ) -> None:
     """Write raw LLM output text to raw_output_path for pipeline chaining."""
     raw_dir_str = getattr(getattr(source_cfg, "paths", None), "raw_output_path", None)
@@ -132,7 +135,7 @@ def _write_raw_output(
     raw_file = raw_dir / f"{stem}{ext}"
 
     raw_text = result.raw_text or ""
-    raw_file.write_text(raw_text, encoding="utf-8")
+    write_file(raw_file, raw_text, file_type="TEXT", state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None) if ctx else None, reason="raw_output")
 
     _logger.info("raw output written: %s", raw_file)
 
