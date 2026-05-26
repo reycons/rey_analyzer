@@ -37,7 +37,7 @@ from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
-from rey_analyzer.runner import run_all, run_analysis, run_source
+from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
 
 __all__: list[str] = []
 
@@ -117,6 +117,9 @@ def main() -> int:
             if status == "failed":
                 return 1
 
+        elif args.command == "build-payload":
+            _cmd_build_payload(ctx, args, log)
+
         elif args.command == "status":
             _cmd_status(ctx, args, log)
 
@@ -141,6 +144,21 @@ def main() -> int:
 # ---------------------------------------------------------------------------
 # Command handlers
 # ---------------------------------------------------------------------------
+
+def _cmd_build_payload(ctx: Any, args: argparse.Namespace, log: Any) -> None:
+    """Build and print the LLM payload as JSON without calling the API."""
+    import json  # noqa: PLC0415
+
+    analysis_cfg = _resolve_analysis(ctx, args.analysis)
+    file_path    = Path(args.file).expanduser().resolve()
+    result       = build_payload(ctx, analysis_cfg, file_path)
+    log.info(
+        "build-payload complete: analysis=%s rows=%d",
+        result["analysis_name"],
+        result["rows_sampled"],
+    )
+    print(json.dumps(result, ensure_ascii=False))
+
 
 def _cmd_status(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Print the status of a past run by run_id."""
@@ -233,6 +251,10 @@ def _parse_args() -> argparse.Namespace:
     p_analyze = sub.add_parser("analyze-file", help="Analyze one file without moving it.")
     p_analyze.add_argument("--source", required=True, help="Data source name.")
     p_analyze.add_argument("--file",   required=True, help="Path to the file.")
+
+    p_payload = sub.add_parser("build-payload", help="Build and print the LLM payload without calling the API.")
+    p_payload.add_argument("--analysis", required=True, help="Analysis config name.")
+    p_payload.add_argument("--file",     required=True, help="Path to the data file.")
 
     p_status = sub.add_parser("status", help="Print status of a past run.")
     p_status.add_argument("--run-id", required=True, dest="run_id", help="Run ID.")

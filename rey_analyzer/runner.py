@@ -47,7 +47,7 @@ from rey_analyzer.preprocessor import build_incident_packet
 from rey_analyzer.requests import AnalysisRequest, build_request
 from rey_analyzer.results import build_artifact_store, write_result
 
-__all__ = ["run_all", "run_source", "run_analysis"]
+__all__ = ["run_all", "run_source", "run_analysis", "build_payload"]
 
 _logger = get_logger(__name__)
 
@@ -241,6 +241,104 @@ def run_analysis(
             except Exception:  # noqa: BLE001
                 _logger.error("could not move '%s' to failed.", file_path.name)
         return "failed"
+
+
+def build_payload(
+    ctx:          Any,
+    analysis_cfg: Any,
+    file_path:    Path,
+) -> dict[str, Any]:
+    """Build the exact LLM payload for one analysis config and file.
+
+    Applies the same extract → prepare pipeline as run_analysis but stops
+    before calling the LLM provider. Returns a dict with the formatted
+    payload string and preparation metadata.
+
+    Parameters
+    ----------
+    ctx : Any
+        Application context — used to resolve ``contracts_root``.
+    analysis_cfg : Any
+        Analysis config Namespace (from ctx.analysis_configs).
+    file_path : Path
+        Absolute path to the file to include in the payload.
+
+    Returns
+    -------
+    dict[str, Any]
+        Keys: analysis_name, data_file, rows_sampled, content.
+    """
+    from rey_lib.llm.analysis import load_analysis_contract  # noqa: PLC0415
+    from rey_lib.llm.preparation import prepare  # noqa: PLC0415
+
+    # Resolve contract path the same way build_request does.
+    contracts_root_val = getattr(ctx, "contracts_root", None)
+    contracts_root = (
+        Path(str(contracts_root_val)).expanduser().resolve()
+        if contracts_root_val
+        else Path(__file__).parent.parent
+    )
+    contract_rel = getattr(analysis_cfg, "contract", "")
+    if not contract_rel:
+        raise ConfigurationError(
+            f"analysis_config '{analysis_cfg.name}' has no contract path."
+        )
+    p = Path(contract_rel)
+    contract_path = p.resolve() if p.is_absolute() else (contracts_root / contract_rel).resolve()
+
+    contract = load_analysis_contract(contract_path)
+
+    # Infer input type from file extension — mirrors _build_data_source logic.
+    suffix = file_path.suffix.lower()
+    input_type_map = {
+        ".jsonl": "jsonl_file",
+        ".json":  "json_file",
+        ".csv":   "csv_file",
+        ".xlsx":  "excel_file",
+        ".xls":   "excel_file",
+    }
+    input_type = input_type_map.get(suffix, "text_file")
+    source = _build_data_source(input_type, file_path, analysis_cfg)
+
+    spec = contract.spec
+    raw = source.extract(max_extract=10_000)
+    prepared = prepare(
+        raw,
+        allowed_columns  = spec.allowed_columns,
+        required_filters = spec.required_filters,
+        max_rows         = spec.max_rows,
+        sampling_method  = spec.sampling_method,
+        sampling_seed    = spec.sampling_seed,
+        redaction_rules  = spec.redaction,
+    )
+
+    _logger.info(
+        "build-payload: contract='%s' rows_sampled=%d file='%s'",
+        contract.name,
+        prepared.profile.rows_sampled,
+        file_path.name,
+    )
+
+    content = "\n".join([
+        f"# {contract.name}",
+        "",
+        "## System Prompt (Contract)",
+        "",
+        contract.base.body.strip(),
+        "",
+        "---",
+        "",
+        f"## Input Data — {file_path.name} ({prepared.profile.rows_sampled} rows)",
+        "",
+        prepared.rendered_text,
+    ])
+
+    return {
+        "analysis_name": analysis_cfg.name,
+        "data_file":     file_path.name,
+        "rows_sampled":  prepared.profile.rows_sampled,
+        "content":       content,
+    }
 
 
 # ---------------------------------------------------------------------------
