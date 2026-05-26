@@ -148,10 +148,24 @@ def main() -> int:
 def _cmd_build_payload(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Build and print the LLM payload as JSON without calling the API."""
     import json  # noqa: PLC0415
+    from rey_lib.files.file_utils import discover_inbox_files  # noqa: PLC0415
 
-    analysis_cfg = _resolve_analysis(ctx, args.analysis)
-    file_path    = Path(args.file).expanduser().resolve()
-    result       = build_payload(ctx, analysis_cfg, file_path)
+    if args.source:
+        source_cfg   = _resolve_source(ctx, args.source)
+        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
+        files        = discover_inbox_files(source_cfg)
+        if not files:
+            raise ConfigurationError(
+                f"No files in inbox for source '{args.source}'. "
+                f"Cannot build payload without input data."
+            )
+        file_path = files[0]
+        log.info("build-payload: using first inbox file '%s'", file_path.name)
+    else:
+        analysis_cfg = _resolve_analysis(ctx, args.analysis)
+        file_path    = Path(args.file).expanduser().resolve()
+
+    result = build_payload(ctx, analysis_cfg, file_path)
     log.info(
         "build-payload complete: analysis=%s rows=%d",
         result["analysis_name"],
@@ -253,8 +267,9 @@ def _parse_args() -> argparse.Namespace:
     p_analyze.add_argument("--file",   required=True, help="Path to the file.")
 
     p_payload = sub.add_parser("build-payload", help="Build and print the LLM payload without calling the API.")
-    p_payload.add_argument("--analysis", required=True, help="Analysis config name.")
-    p_payload.add_argument("--file",     required=True, help="Path to the data file.")
+    p_payload.add_argument("--source",   default="", help="Data source name (uses first inbox file).")
+    p_payload.add_argument("--analysis", default="", help="Analysis config name (requires --file).")
+    p_payload.add_argument("--file",     default="", help="Path to a specific data file (requires --analysis).")
 
     p_status = sub.add_parser("status", help="Print status of a past run.")
     p_status.add_argument("--run-id", required=True, dest="run_id", help="Run ID.")
