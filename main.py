@@ -40,6 +40,7 @@ from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
 __all__: list[str] = []
 
 _PROJECT_ROOT = Path(__file__).parent
+APP_NAME = "rey_analyzer"
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ def main() -> int:
 
     if not args.config_path:
         raise SystemExit("--config-path is required.")
-    ctx = build_ctx_from_path(Path(args.config_path))
+    ctx = build_ctx_from_path(Path(args.config_path), app_name=APP_NAME)
 
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
