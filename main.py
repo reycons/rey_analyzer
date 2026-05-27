@@ -28,8 +28,7 @@ from pathlib import Path
 from rey_lib.config.cli import preparse_config_args
 preparse_config_args()
 
-from rey_lib.config.cli import add_config_args, apply_env_overrides
-from rey_lib.config.config_utils import build_ctx_from_path
+from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_from_args
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
@@ -54,7 +53,7 @@ def main() -> int:
 
     if not args.config_path:
         raise SystemExit("--config-path is required.")
-    ctx = build_ctx_from_path(Path(args.config_path), app_name=APP_NAME)
+    ctx = build_ctx_from_args(args, app_name=APP_NAME)
 
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
