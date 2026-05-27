@@ -8,19 +8,18 @@ final folders.
 
 Usage
 -----
-    python main.py --env dev run
-    python main.py --env dev run-source rey_loader_logs
-    python main.py --env dev submit-file --source rey_loader_logs --file /path/file.jsonl
-    python main.py --env dev analyze-file --source rey_loader_logs --file /path/file.jsonl
-    python main.py --env dev status --run-id <run_id>
-    python main.py --env dev approve --run-id <run_id>
-    python main.py --env dev reject --run-id <run_id>
+    python main.py --config-path /path/to/configs/v01/config.yaml run
+    python main.py --config-path /path/to/configs/v01/config.yaml run-source rey_loader_logs
+    python main.py --config-path /path/to/configs/v01/config.yaml submit-file --source rey_loader_logs --file /path/file.jsonl
+    python main.py --config-path /path/to/configs/v01/config.yaml analyze-file --source rey_loader_logs --file /path/file.jsonl
+    python main.py --config-path /path/to/configs/v01/config.yaml status --run-id <run_id>
+    python main.py --config-path /path/to/configs/v01/config.yaml approve --run-id <run_id>
+    python main.py --config-path /path/to/configs/v01/config.yaml reject --run-id <run_id>
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -29,9 +28,8 @@ from pathlib import Path
 from rey_lib.config.cli import preparse_config_args
 preparse_config_args()
 
-from rey_lib.config.bootstrap import build_ctx_for_app
 from rey_lib.config.cli import add_config_args, apply_env_overrides
-from rey_lib.config.config_utils import build_ctx
+from rey_lib.config.config_utils import build_ctx_from_path
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
@@ -42,7 +40,6 @@ from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
 __all__: list[str] = []
 
 _PROJECT_ROOT = Path(__file__).parent
-_VALID_ENVS   = frozenset({"dev", "prod"})
 
 
 # ---------------------------------------------------------------------------
@@ -54,24 +51,16 @@ def main() -> int:
     args = _parse_args()
     apply_env_overrides(args.env_overrides)
 
-    if args.config_path:
-        ctx = build_ctx_for_app(
-            installation_config_path=Path(args.config_path),
-            app_name="rey_analyzer",
-            project_root=_PROJECT_ROOT,
-        )
-    else:
-        if not args.env:
-            raise SystemExit("--env is required when --config-path is not provided.")
-        config_dir = Path(args.config_dir).expanduser().resolve() if args.config_dir else None
-        ctx = build_ctx(env=args.env, project_root=_PROJECT_ROOT, config_dir=config_dir)
+    if not args.config_path:
+        raise SystemExit("--config-path is required.")
+    ctx = build_ctx_from_path(Path(args.config_path))
 
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
 
     setup_logging(ctx, operation=args.command)
     log = get_logger(__name__)
-    log.info("rey_analyzer starting — env=%s command=%s", ctx.env, args.command)
+    log.info("rey_analyzer starting — command=%s", args.command)
 
     try:
         if args.command == "run":

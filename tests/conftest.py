@@ -74,7 +74,6 @@ def sample_ctx(tmp_path: Path) -> SimpleNamespace:
         stop_on_error     = False,
     )
     return SimpleNamespace(
-        env             = "dev",
         app             = app,
         runtime         = runtime,
         data_sources    = [],

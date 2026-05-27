@@ -7,9 +7,6 @@
 
 # Config file names used by this app:
 #   app.yaml
-#   config.dev.yaml
-#   config.test.yaml
-#   config.prod.yaml
 #   data_sources/data_source.{name}.yaml
 #   app/analysis_configs.yaml
 #   app/llm_configs.yaml
@@ -32,12 +29,11 @@ version: v01
 
 
 # =============================================================================
-# FILE: config.{env}.yaml
+# FILE: app.yaml  (continued — rey_analyzer-specific settings)
 #
-# Main app config. One per environment (dev, test, prod).
-# Loaded via --env <env> or via --config-path pointing to the installation
-# config, which resolves to this file through its apps.rey_analyzer.config_path
-# entry. The env is derived from the filename: config.<env>.yaml.
+# App config merged with the installation config.yaml at startup.
+# Loaded via --config-path pointing to the installation config.yaml;
+# build_ctx_from_path rglobs all YAML files in the same directory.
 # =============================================================================
 
 # Base directory for resolving relative contract paths in analysis_configs.yaml.
@@ -334,3 +330,151 @@ llm_profiles:
 
     timeout_seconds: 120
     # Optional provider timeout.
+
+
+# =============================================================================
+# CLI — rey_analyzer command-line interface
+#
+# All parameters are passed as --name value. Commands are positional
+# subcommands after shared config/pipeline parameters.
+# =============================================================================
+
+cli:
+  invocation: "python main.py [shared_parameters] <command> [command_parameters]"
+  # Structured CLI contract for LLM/pipeline authors.
+  # rey_analyzer is subcommand-driven. Pipeline steps should set command to
+  # one of the names below, then pass only parameters allowed for that command.
+
+  shared_parameters:
+    - name: config-path
+      required: true
+      value_type: path
+      description: Path to the installation config.yaml (or its directory). All app YAMLs in the same directory are loaded automatically.
+
+    - name: set
+      required: false
+      repeatable: true
+      value_type: KEY=VALUE
+      description: Override an environment variable for this run.
+
+    - name: pipeline-name
+      required: false
+      value_type: string
+      description: Pipeline name supplied by pipeline_coordinator.
+
+    - name: pipeline-run-id
+      required: false
+      value_type: string
+      description: Unique pipeline run identifier supplied by pipeline_coordinator.
+
+    - name: pipeline-step-name
+      required: false
+      value_type: string
+      description: Pipeline step name supplied by pipeline_coordinator.
+
+    - name: pipeline-step-id
+      required: false
+      value_type: string
+      description: Optional unique pipeline step identifier.
+
+    - name: log-file
+      required: false
+      value_type: path
+      description: Shared pipeline JSONL log path.
+
+  commands:
+    - name: run
+      description: Process all enabled data sources.
+      parameters: []
+
+    - name: run-source
+      description: Process one named data source.
+      parameters:
+        - name: source
+          required: true
+          value_type: string
+          description: Data source name from data_sources.
+
+    - name: submit-file
+      description: Submit one file for analysis and apply source movement rules.
+      parameters:
+        - name: source
+          required: true
+          value_type: string
+          description: Data source name from data_sources.
+        - name: file
+          required: true
+          value_type: path
+          description: File to analyze.
+
+    - name: analyze-file
+      description: Analyze one file without moving it.
+      parameters:
+        - name: source
+          required: true
+          value_type: string
+          description: Data source name from data_sources.
+        - name: file
+          required: true
+          value_type: path
+          description: File to analyze.
+
+    - name: build-payload
+      description: Build and print the LLM payload without calling the API.
+      parameter_modes:
+        - mode: source
+          required_parameters: [source]
+          description: Uses the first inbox file for the named source.
+        - mode: explicit_file
+          required_parameters: [analysis, file]
+          description: Uses an explicit analysis config and file path.
+      parameters:
+        - name: source
+          required: false
+          value_type: string
+          description: Data source name; uses first inbox file when supplied.
+        - name: analysis
+          required: false
+          value_type: string
+          description: Analysis config name; use with file when source is omitted.
+        - name: file
+          required: false
+          value_type: path
+          description: File to build a payload for when analysis is supplied.
+
+    - name: status
+      description: Print status for a past run.
+      parameters:
+        - name: run-id
+          required: true
+          value_type: string
+          description: Run identifier.
+
+    - name: approve
+      description: Approve a pending-approval run.
+      parameters:
+        - name: run-id
+          required: true
+          value_type: string
+          description: Run identifier.
+        - name: reviewer
+          required: false
+          value_type: string
+          description: Reviewer name.
+
+    - name: reject
+      description: Reject a pending-approval run.
+      parameters:
+        - name: run-id
+          required: true
+          value_type: string
+          description: Run identifier.
+        - name: reviewer
+          required: false
+          value_type: string
+          description: Reviewer name.
+
+  examples:
+    - "python main.py --config-path ~/installations/ccc/configs/v01/config.yaml run"
+    - "python main.py --config-path ~/installations/ccc/configs/v01/config.yaml run-source --source rey_loader_logs"
+    - "python main.py --config-path ~/installations/ccc/configs/v01/config.yaml build-payload --source rey_loader_logs"
