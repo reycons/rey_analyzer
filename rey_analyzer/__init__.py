@@ -1,3 +1,3 @@
 """rey_analyzer — contract-driven LLM analysis application."""
 
-__version__ = "0.4.5"
+__version__ = "2.0.0"
