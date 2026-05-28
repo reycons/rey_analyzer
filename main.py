@@ -51,8 +51,6 @@ def main() -> int:
     args = _parse_args()
     apply_env_overrides(args.env_overrides)
 
-    if not args.config_path:
-        raise SystemExit("--config-path is required.")
     ctx = build_ctx_from_args(args, app_name=APP_NAME)
 
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
