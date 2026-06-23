@@ -345,6 +345,30 @@ def build_payload(
 # Private factories
 # ---------------------------------------------------------------------------
 
+# Profile keys forwarded to the provider as options (endpoint, timeout, and
+# capability flags). Only keys present on the profile are forwarded.
+_PROVIDER_OPTION_KEYS = (
+    "endpoint",
+    "timeout_seconds",
+    "supports_tools",
+    "supports_images",
+    "supports_json_mode",
+    "supports_streaming",
+    "supports_system_messages",
+    "max_context_tokens",
+)
+
+
+def _profile_provider_options(llm_profile: Any) -> dict[str, Any]:
+    """Collect provider option keys present on the LLM profile."""
+    options: dict[str, Any] = {}
+    for key in _PROVIDER_OPTION_KEYS:
+        value = getattr(llm_profile, key, None)
+        if value is not None:
+            options[key] = value
+    return options
+
+
 def _build_analyzer(
     ctx:          Any,
     analysis_cfg: Any,
@@ -358,6 +382,8 @@ def _build_analyzer(
         provider          = llm_profile.provider,
         model             = llm_profile.model,
         api_key           = getattr(llm_profile, "api_key", ""),
+        temperature       = float(getattr(llm_profile, "temperature", 0.0) or 0.0),
+        provider_options  = _profile_provider_options(llm_profile),
         artifact_store    = artifact_store,
         requires_approval = request.requires_approval,
     )
