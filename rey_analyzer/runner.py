@@ -140,6 +140,15 @@ def run_source(
     files     = discover_inbox_files(source_cfg)[:max_files]
 
     if not files:
+        if bool(getattr(source_cfg, "require_input", False)):
+            inbox = getattr(getattr(source_cfg, "paths", None), "inbox_path", "")
+            pattern = getattr(source_cfg, "file_pattern", "*")
+            raise SourceError(
+                f"source '{source_cfg.name}': no input files matched "
+                f"'{pattern}' in {inbox}. This step requires input produced by "
+                "an upstream step. Confirm the upstream step (e.g. file_redactor) "
+                "ran successfully and that the inbox path and redact.yaml are correct."
+            )
         _logger.info("source '%s': inbox is empty.", source_cfg.name)
         return 0, 0, 0
 
