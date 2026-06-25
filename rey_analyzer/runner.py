@@ -20,6 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from rey_lib.artifacts import artifact_config_from_ctx
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.files.file_utils import (
     discover_inbox_files,
@@ -395,6 +396,7 @@ def _build_analyzer(
         provider_options  = _profile_provider_options(llm_profile),
         artifact_store    = artifact_store,
         requires_approval = request.requires_approval,
+        artifact_processing = artifact_config_from_ctx(ctx),
     )
 
 
