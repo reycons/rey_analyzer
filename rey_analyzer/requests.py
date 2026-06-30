@@ -64,7 +64,7 @@ class AnalysisRequest:
         SHA-256 hex digest of the schema file bytes, or empty string if
         no schema file is configured.
     llm_profile_name : str
-        Name of the LLM profile to use.
+        Name of the LLM execution profile to use.
     idempotency_mode : str
         One of: reuse_success, rerun_always, fail_if_exists.
     requires_approval : bool
@@ -130,6 +130,8 @@ def build_request(
     except OSError as exc:
         raise SourceError(f"Cannot read input file: {file_path}") from exc
 
+    llm_profile_name = _resolve_llm_execution_profile(analysis_cfg)
+
     contracts_root = _contracts_root(ctx)
     contract_path = _resolve_path(
         getattr(analysis_cfg, "contract", None),
@@ -167,7 +169,7 @@ def build_request(
         contract_path    = contract_path,
         contract_hash    = contract_hash,
         schema_hash      = schema_hash,
-        llm_profile_name = getattr(analysis_cfg, "llm_profile", "primary"),
+        llm_profile_name = llm_profile_name,
         idempotency_mode = getattr(analysis_cfg, "idempotency_mode", "reuse_success"),
         requires_approval = bool(getattr(analysis_cfg, "requires_approval", False)),
     )
@@ -185,6 +187,38 @@ def _compute_request_id(
     """Return a 16-char deterministic ID from three content hashes."""
     combined = f"{input_hash}:{contract_hash}:{schema_hash}"
     return bytes_sha256(combined.encode())[:16]
+
+
+def _resolve_llm_execution_profile(analysis_cfg: Any) -> str:
+    """Return the named LLM execution profile for an analysis config."""
+    has_current = hasattr(analysis_cfg, "llm_execution_profile")
+    has_legacy = hasattr(analysis_cfg, "llm_profile")
+    name = getattr(analysis_cfg, "name", "<unknown>")
+
+    if has_current and has_legacy:
+        raise ConfigurationError(
+            f"Invalid analysis config '{name}': both 'llm_execution_profile' "
+            "and legacy 'llm_profile' are present. Use only "
+            "'llm_execution_profile'."
+        )
+
+    if has_current:
+        profile = getattr(analysis_cfg, "llm_execution_profile")
+    elif has_legacy:
+        profile = getattr(analysis_cfg, "llm_profile")
+    else:
+        raise ConfigurationError(
+            f"Invalid analysis config '{name}': missing required "
+            "'llm_execution_profile'."
+        )
+
+    if not str(profile or "").strip():
+        raise ConfigurationError(
+            f"Invalid analysis config '{name}': 'llm_execution_profile' "
+            "must not be empty."
+        )
+
+    return str(profile)
 
 
 def _hash_bytes(data: bytes) -> str:

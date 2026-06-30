@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import rey_analyzer.requests as requests_mod
 from rey_analyzer.error_utils import ConfigurationError, SourceError
 from rey_analyzer.requests import _compute_request_id, _hash_bytes, build_request
 
@@ -62,7 +63,7 @@ def test_build_request_missing_contract_raises_config_error(
     bad_cfg = SimpleNamespace(
         name              = "bad",
         contract          = "contracts/nonexistent/v01.md",
-        llm_profile       = "primary",
+        llm_execution_profile = "primary",
         idempotency_mode  = "reuse_success",
         requires_approval = False,
         schema            = None,
@@ -79,10 +80,75 @@ def test_build_request_no_contract_field_raises_config_error(
     cfg = SimpleNamespace(
         name              = "bad",
         contract          = None,
-        llm_profile       = "primary",
+        llm_execution_profile = "primary",
         idempotency_mode  = "reuse_success",
         requires_approval = False,
         schema            = None,
     )
     with pytest.raises(ConfigurationError):
         build_request(sample_source_cfg, cfg, sample_jsonl_file)
+
+
+def test_build_request_uses_llm_execution_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+) -> None:
+    """build_request reads the canonical llm_execution_profile field."""
+    monkeypatch.setattr(
+        requests_mod,
+        "load_analysis_contract",
+        lambda path: SimpleNamespace(hash="contract_hash"),
+    )
+
+    req = build_request(sample_source_cfg, sample_analysis_cfg, sample_jsonl_file)
+
+    assert req.llm_profile_name == "primary"
+
+
+def test_build_request_accepts_legacy_llm_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+) -> None:
+    """build_request temporarily accepts legacy llm_profile for compatibility."""
+    monkeypatch.setattr(
+        requests_mod,
+        "load_analysis_contract",
+        lambda path: SimpleNamespace(hash="contract_hash"),
+    )
+    legacy_cfg = SimpleNamespace(**vars(sample_analysis_cfg))
+    delattr(legacy_cfg, "llm_execution_profile")
+    legacy_cfg.llm_profile = "legacy_primary"
+
+    req = build_request(sample_source_cfg, legacy_cfg, sample_jsonl_file)
+
+    assert req.llm_profile_name == "legacy_primary"
+
+
+def test_build_request_rejects_both_execution_profile_fields(
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+) -> None:
+    """build_request fails closed when canonical and legacy fields both exist."""
+    bad_cfg = SimpleNamespace(**vars(sample_analysis_cfg))
+    bad_cfg.llm_profile = "legacy_primary"
+
+    with pytest.raises(ConfigurationError, match="both 'llm_execution_profile'"):
+        build_request(sample_source_cfg, bad_cfg, sample_jsonl_file)
+
+
+def test_build_request_requires_execution_profile(
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+) -> None:
+    """build_request fails closed when no LLM execution profile is configured."""
+    bad_cfg = SimpleNamespace(**vars(sample_analysis_cfg))
+    delattr(bad_cfg, "llm_execution_profile")
+
+    with pytest.raises(ConfigurationError, match="missing required 'llm_execution_profile'"):
+        build_request(sample_source_cfg, bad_cfg, sample_jsonl_file)

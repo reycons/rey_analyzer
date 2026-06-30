@@ -55,7 +55,7 @@ def sample_analysis_cfg() -> SimpleNamespace:
     return SimpleNamespace(
         name              = "etl_log_failure",
         contract          = "contracts/etl_log_failure/v01.md",
-        llm_profile       = "primary",
+        llm_execution_profile = "primary",
         idempotency_mode  = "reuse_success",
         requires_approval = False,
         schema            = None,
