@@ -33,7 +33,7 @@ def test_run_source_returns_nonzero_when_any_file_failed() -> None:
     with (
         patch.object(analyzer_main, "_parse_args", return_value=_args("run-source", source="src")),
         patch.object(analyzer_main, "apply_env_overrides"),
-        patch.object(analyzer_main, "build_ctx_from_path", return_value=_ctx()),
+        patch.object(analyzer_main, "build_ctx_from_args", return_value=_ctx()),
         patch.object(analyzer_main, "_resolve_source", return_value=source),
         patch.object(analyzer_main, "_resolve_analysis", return_value=SimpleNamespace()),
         patch.object(analyzer_main, "run_source", return_value=(4, 1, 0)),
@@ -53,7 +53,7 @@ def test_submit_file_returns_nonzero_when_analysis_failed() -> None:
             return_value=_args("submit-file", source="src", file="/tmp/input.json"),
         ),
         patch.object(analyzer_main, "apply_env_overrides"),
-        patch.object(analyzer_main, "build_ctx_from_path", return_value=_ctx()),
+        patch.object(analyzer_main, "build_ctx_from_args", return_value=_ctx()),
         patch.object(analyzer_main, "_resolve_source", return_value=source),
         patch.object(analyzer_main, "_resolve_analysis", return_value=SimpleNamespace()),
         patch.object(analyzer_main, "run_analysis", return_value="failed"),
