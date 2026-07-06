@@ -20,7 +20,7 @@ from typing import Any
 from rey_lib.files.file_utils import write_file
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
-from rey_lib.logs import get_logger
+from rey_lib.logs import get_logger, log_artifact_reference
 
 from rey_analyzer.requests import AnalysisRequest
 
@@ -102,6 +102,14 @@ def write_result(
     _state = {"state_ctx": ctx, "app": "rey_analyzer", "pipeline": getattr(ctx, "pipeline_name", None) if ctx else None, "reason": "analyzed"}
     write_file(result_file, record, file_type="JSON", **_state)
 
+    # The analysis result JSON is a run-created output; record it as an artifact on
+    # the append-only run log (SGC_Rey_Log_Writer_Run_View_Groups) when a run context
+    # is present. Emission is fail-safe and never blocks result writing.
+    if ctx is not None:
+        log_artifact_reference(
+            ctx, str(result_file), role="analysis_result", event="written",
+        )
+
     _logger.info(
         "result written: run_id=%s status=%s path=%s",
         request.run_id, result.status, run_dir,
@@ -136,6 +144,12 @@ def _write_raw_output(
 
     raw_text = result.raw_text or ""
     write_file(raw_file, raw_text, file_type="TEXT", state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None) if ctx else None, reason="raw_output")
+
+    # Raw LLM output is a run-created artifact used for pipeline chaining.
+    if ctx is not None:
+        log_artifact_reference(
+            ctx, str(raw_file), role="raw_output", event="written",
+        )
 
     _logger.info("raw output written: %s", raw_file)
 
