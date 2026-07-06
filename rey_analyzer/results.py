@@ -45,7 +45,9 @@ def build_artifact_store(ctx: Any) -> LocalArtifactStore:
     """
     artifacts_path = Path(ctx.app.artifacts_path).expanduser().resolve()
     artifacts_path.mkdir(parents=True, exist_ok=True)
-    return LocalArtifactStore(base_dir=artifacts_path)
+    # Pass the run context so each written LLM stage-result JSON is recorded as a
+    # files/artifacts run-log artifact (SGC_Rey_Log_Writer_Run_View_Groups).
+    return LocalArtifactStore(base_dir=artifacts_path, run_ctx=ctx)
 
 
 def write_result(
