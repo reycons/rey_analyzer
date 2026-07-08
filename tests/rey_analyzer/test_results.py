@@ -44,6 +44,42 @@ def test_write_result_logs_result_json_as_run_artifact(tmp_path: Path) -> None:
     assert artifact["artifact_role"] == "analysis_result"
     assert artifact["path"] == str(run_dir / "result.json")
     assert artifact["run_id"] == "run-pipe-1"
+    # Producer-tagged evidence: analysis result under the analyzer producer.
+    assert artifact["producer"] == "analyzer"
+    assert artifact["artifact_type"] == "analysis_result"
+    assert artifact["source_path"] == str(tmp_path / "input.csv")
+    assert artifact["safe_to_preview"] is True
+
+
+def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
+    """Raw LLM output is recorded as an llm_result artifact under the llm producer."""
+    from rey_lib.logs import group_artifacts_by_producer, normalize_artifacts
+
+    source_cfg = SimpleNamespace(paths=SimpleNamespace(
+        results_path=str(tmp_path / "results"),
+        raw_output_path=str(tmp_path / "raw")))
+    request = _request("run-analysis-2", tmp_path / "input.profile.json")
+    result = SimpleNamespace(status="success", data={"ok": True},
+                             raw_text="GENERATED DDL", errors=[])
+    analysis_cfg = SimpleNamespace(output=SimpleNamespace(write_raw=True))
+    ctx = SimpleNamespace(
+        log_file=str(tmp_path / "rey_analyzer.jsonl"), owner_app_name="rey_analyzer",
+        run_id="run-pipe-2", run_timestamp="20260708_000000",
+    )
+
+    write_result(request, result, source_cfg, analysis_cfg=analysis_cfg, ctx=ctx)
+
+    records = [json.loads(line)
+               for line in Path(ctx.run_log_path).read_text(encoding="utf-8").splitlines()]
+    raw = next(r for r in records
+               if r["record_type"] == "ARTIFACT_REFERENCE" and r.get("artifact_role") == "raw_output")
+    assert raw["producer"] == "llm"
+    assert raw["artifact_type"] == "llm_result"
+    assert raw["safe_to_preview"] is True
+
+    # Normalized: result.json under analyzer, raw LLM output under llm.
+    groups = group_artifacts_by_producer(normalize_artifacts(records))
+    assert "analyzer" in groups and "llm" in groups
 
 
 def test_raw_output_stem_preserves_dots_in_yaml_filename() -> None:

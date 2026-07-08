@@ -110,6 +110,9 @@ def write_result(
     if ctx is not None:
         log_artifact_reference(
             ctx, str(result_file), role="analysis_result", event="written",
+            producer="analyzer", artifact_type="analysis_result",
+            source_path=str(getattr(request, "file_path", "") or ""),
+            viewer_type="file", safe_to_preview=True,
         )
 
     _logger.info(
@@ -151,6 +154,9 @@ def _write_raw_output(
     if ctx is not None:
         log_artifact_reference(
             ctx, str(raw_file), role="raw_output", event="written",
+            producer="llm", artifact_type="llm_result",
+            source_path=str(getattr(request, "file_path", "") or ""),
+            viewer_type="file", safe_to_preview=True,
         )
 
     _logger.info("raw output written: %s", raw_file)
