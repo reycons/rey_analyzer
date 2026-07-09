@@ -32,6 +32,7 @@ from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_f
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
+from rey_lib.run_lifecycle import run_app_operation
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
 from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
@@ -61,63 +62,11 @@ def main() -> int:
     log.info("rey_analyzer starting — command=%s", args.command)
 
     try:
-        if args.command == "run":
-            success, failed, pending = run_all(ctx)
-            log.info(
-                "run complete: success=%d failed=%d pending=%d",
-                success, failed, pending,
-            )
-            if failed:
-                log.error("rey_analyzer run failed: %d file(s) failed.", failed)
-                return 1
-
-        elif args.command == "run-source":
-            source_cfg   = _resolve_source(ctx, args.source)
-            analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-            success, failed, pending = run_source(ctx, source_cfg, analysis_cfg)
-            log.info(
-                "run-source complete: success=%d failed=%d pending=%d",
-                success, failed, pending,
-            )
-            if failed:
-                log.error("run-source failed: %d file(s) failed.", failed)
-                return 1
-
-        elif args.command == "submit-file":
-            source_cfg   = _resolve_source(ctx, args.source)
-            analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-            file_path    = Path(args.file).expanduser().resolve()
-            status       = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
-            log.info("submit-file complete: status=%s", status)
-            if status == "failed":
-                return 1
-
-        elif args.command == "analyze-file":
-            # analyze-file runs the analysis without moving the file.
-            source_cfg   = _resolve_source(ctx, args.source)
-            analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-            file_path    = Path(args.file).expanduser().resolve()
-            status       = run_analysis(
-                ctx, source_cfg, analysis_cfg, file_path,
-            )
-            log.info("analyze-file complete: status=%s", status)
-            if status == "failed":
-                return 1
-
-        elif args.command == "build-payload":
-            _cmd_build_payload(ctx, args, log)
-
-        elif args.command == "status":
-            _cmd_status(ctx, args, log)
-
-        elif args.command == "approve":
-            _cmd_approve(ctx, args, log)
-
-        elif args.command == "reject":
-            _cmd_reject(ctx, args, log)
-
-        log.info("rey_analyzer complete.")
-        return 0
+        return run_app_operation(
+            ctx,
+            str(args.command),
+            lambda: _execute_command(ctx, args, log),
+        )
 
     except (AnalyzerError, AppError) as exc:
         handle_exception(log, exc, "rey_analyzer error")
@@ -126,6 +75,67 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001  — top-level safety net only
         handle_exception(log, exc, "Unexpected error in rey_analyzer")
         return 2
+
+
+def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
+    """Execute the selected analyzer command body."""
+    if args.command == "run":
+        success, failed, pending = run_all(ctx)
+        log.info(
+            "run complete: success=%d failed=%d pending=%d",
+            success, failed, pending,
+        )
+        if failed:
+            log.error("rey_analyzer run failed: %d file(s) failed.", failed)
+            return 1
+
+    elif args.command == "run-source":
+        source_cfg   = _resolve_source(ctx, args.source)
+        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
+        success, failed, pending = run_source(ctx, source_cfg, analysis_cfg)
+        log.info(
+            "run-source complete: success=%d failed=%d pending=%d",
+            success, failed, pending,
+        )
+        if failed:
+            log.error("run-source failed: %d file(s) failed.", failed)
+            return 1
+
+    elif args.command == "submit-file":
+        source_cfg   = _resolve_source(ctx, args.source)
+        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
+        file_path    = Path(args.file).expanduser().resolve()
+        status       = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
+        log.info("submit-file complete: status=%s", status)
+        if status == "failed":
+            return 1
+
+    elif args.command == "analyze-file":
+        # analyze-file runs the analysis without moving the file.
+        source_cfg   = _resolve_source(ctx, args.source)
+        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
+        file_path    = Path(args.file).expanduser().resolve()
+        status       = run_analysis(
+            ctx, source_cfg, analysis_cfg, file_path,
+        )
+        log.info("analyze-file complete: status=%s", status)
+        if status == "failed":
+            return 1
+
+    elif args.command == "build-payload":
+        _cmd_build_payload(ctx, args, log)
+
+    elif args.command == "status":
+        _cmd_status(ctx, args, log)
+
+    elif args.command == "approve":
+        _cmd_approve(ctx, args, log)
+
+    elif args.command == "reject":
+        _cmd_reject(ctx, args, log)
+
+    log.info("rey_analyzer complete.")
+    return 0
 
 
 # ---------------------------------------------------------------------------
