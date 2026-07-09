@@ -30,7 +30,13 @@ from rey_lib.files.file_utils import (
     read_text_file,
 )
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
-from rey_lib.logs import get_logger
+from rey_lib.logs import (
+    get_logger,
+    log_input_discovered,
+    log_input_file_reference,
+    log_row_count,
+    log_validation_result,
+)
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.datasource import (
     CSVDataSource,
@@ -139,11 +145,40 @@ def run_source(
     """
     max_files = _max_files(ctx, source_cfg)
     files     = discover_inbox_files(source_cfg)[:max_files]
+    pattern = str(getattr(source_cfg, "file_pattern", "*") or "*")
+    inbox = str(getattr(getattr(source_cfg, "paths", None), "inbox_path", "") or "")
+    log_row_count(
+        ctx,
+        count_name="analysis_input_files_discovered",
+        count=len(files),
+        subject=source_cfg.name,
+        input_type=getattr(source_cfg, "input_type", ""),
+        pattern=pattern,
+        source_path=inbox,
+    )
+    for discovered in files:
+        log_input_discovered(
+            ctx,
+            input_name=source_cfg.name,
+            path=str(discovered),
+            pattern=pattern,
+            source_config=source_cfg.name,
+            exists=discovered.exists(),
+            safe_to_preview=True,
+            input_type=getattr(source_cfg, "input_type", ""),
+        )
 
     if not files:
         if bool(getattr(source_cfg, "require_input", False)):
-            inbox = getattr(getattr(source_cfg, "paths", None), "inbox_path", "")
-            pattern = getattr(source_cfg, "file_pattern", "*")
+            log_validation_result(
+                ctx,
+                validation_name="analysis_input_required",
+                status="failed",
+                message=f"source '{source_cfg.name}' has no required input files",
+                source_name=source_cfg.name,
+                pattern=pattern,
+                source_path=inbox,
+            )
             raise SourceError(
                 f"source '{source_cfg.name}': no input files matched "
                 f"'{pattern}' in {inbox}. This step requires input produced by "
@@ -151,6 +186,15 @@ def run_source(
                 "ran successfully and that the inbox path and redact.yaml are correct."
             )
         _logger.info("source '%s': inbox is empty.", source_cfg.name)
+        log_validation_result(
+            ctx,
+            validation_name="analysis_input_required",
+            status="success",
+            message=f"source '{source_cfg.name}' has no required input files",
+            source_name=source_cfg.name,
+            pattern=pattern,
+            source_path=inbox,
+        )
         return 0, 0, 0
 
     _logger.info("source '%s': %d file(s) to process.", source_cfg.name, len(files))
@@ -207,6 +251,15 @@ def run_analysis(
     object.__setattr__(ctx, "source_name", source_cfg.name)
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
+    log_input_file_reference(
+        ctx,
+        str(file_path),
+        file_role="analysis_input",
+        display_name=file_path.name,
+        source_name=source_cfg.name,
+        analysis_name=analysis_cfg.name,
+        input_type=getattr(source_cfg, "input_type", ""),
+    )
 
     move_files = getattr(source_cfg, "move_files", True)
 
@@ -226,6 +279,15 @@ def run_analysis(
         result      = analyzer.analyze(source, analysis_id=request.request_id)
 
         write_result(request, result, source_cfg, analysis_cfg, ctx=ctx)
+        log_validation_result(
+            ctx,
+            validation_name="analysis_result",
+            status=result.status,
+            message=f"analysis={analysis_cfg.name} file={file_path.name} status={result.status}",
+            source_name=source_cfg.name,
+            analysis_name=analysis_cfg.name,
+            input_file=str(file_path),
+        )
 
         if result.status == "pending_approval":
             _logger.info(
@@ -250,6 +312,15 @@ def run_analysis(
                 move_to_failed(processing, source_cfg, state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None))
             except Exception:  # noqa: BLE001
                 _logger.error("could not move '%s' to failed.", file_path.name)
+        log_validation_result(
+            ctx,
+            validation_name="analysis_result",
+            status="failed",
+            message=f"analysis={analysis_cfg.name} file={file_path.name} failed",
+            source_name=source_cfg.name,
+            analysis_name=analysis_cfg.name,
+            input_file=str(file_path),
+        )
         return "failed"
 
 

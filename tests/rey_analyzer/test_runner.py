@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -79,6 +80,43 @@ def test_run_source_empty_inbox(
     assert (success, failed, pending) == (0, 0, 0)
 
 
+def test_run_source_logs_input_discovery_count(
+    sample_ctx: SimpleNamespace,
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+    tmp_path: Path,
+) -> None:
+    """run_source records discovered analyzer input files through shared helpers."""
+    from rey_analyzer.runner import run_source
+
+    object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
+    object.__setattr__(sample_ctx, "run_id", "r1")
+    object.__setattr__(sample_ctx, "run_timestamp", "20260709_000000")
+    inbox = Path(sample_source_cfg.paths.inbox_path)
+    inbox.mkdir(parents=True, exist_ok=True)
+    file_in_inbox = inbox / sample_jsonl_file.name
+    file_in_inbox.write_text(sample_jsonl_file.read_text(encoding="utf-8"), encoding="utf-8")
+
+    with patch("rey_analyzer.runner.run_analysis", return_value="success"):
+        success, failed, pending = run_source(
+            sample_ctx, sample_source_cfg, sample_analysis_cfg
+        )
+
+    assert (success, failed, pending) == (1, 0, 0)
+    records = [
+        json.loads(line)
+        for line in Path(sample_ctx.run_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    count = next(r for r in records if r["record_type"] == "ROW_COUNT")
+    discovered = next(r for r in records if r["record_type"] == "INPUT_DISCOVERED")
+    assert count["count_name"] == "analysis_input_files_discovered"
+    assert count["count"] == 1
+    assert discovered["path"] == str(file_in_inbox)
+    assert discovered["source_config"] == sample_source_cfg.name
+
+
 def test_run_all_returns_failed_count_on_source_exception(
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
@@ -108,6 +146,9 @@ def test_run_analysis_moves_to_failed_on_exception(
     inbox.mkdir(parents=True, exist_ok=True)
     file_in_inbox = inbox / sample_jsonl_file.name
     file_in_inbox.write_text(sample_jsonl_file.read_text())
+    object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
+    object.__setattr__(sample_ctx, "run_id", "r1")
+    object.__setattr__(sample_ctx, "run_timestamp", "20260709_000000")
 
     with patch("rey_analyzer.runner.build_request", side_effect=Exception("boom")):
         status = run_analysis(
@@ -115,3 +156,14 @@ def test_run_analysis_moves_to_failed_on_exception(
         )
 
     assert status == "failed"
+    records = [
+        json.loads(line)
+        for line in Path(sample_ctx.run_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    input_ref = next(r for r in records if r["record_type"] == "INPUT_FILE_REFERENCE")
+    validation = next(r for r in records if r["record_type"] == "VALIDATION_RESULT")
+    assert input_ref["file_role"] == "analysis_input"
+    assert input_ref["path"] == str(file_in_inbox)
+    assert validation["validation_name"] == "analysis_result"
+    assert validation["status"] == "failed"
