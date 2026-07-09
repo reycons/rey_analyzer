@@ -14,10 +14,11 @@ write_result            Write result artifacts for a completed analysis.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
-from rey_lib.files.file_utils import write_file
+from rey_lib.files.file_utils import run_artifact_path, write_file
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
 from rey_lib.logs import get_logger, log_artifact_reference
@@ -58,7 +59,7 @@ def write_result(
     ctx:            Any = None,
 ) -> Path:
     """
-    Write result artifacts to results_path/<run_id>/.
+    Write result artifacts directly under results_path.
 
     Writes result.json containing the structured LLM output and
     execution metadata. Additional artifacts (raw response, validation
@@ -80,8 +81,10 @@ def write_result(
         Path to the result directory written for this run.
     """
     results_root = Path(source_cfg.paths.results_path).expanduser().resolve()
-    run_dir      = results_root / request.run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    results_root.mkdir(parents=True, exist_ok=True)
+
+    run_timestamp = str(getattr(ctx, "run_timestamp", "") or "").strip() or "unknown_time"
+    step_name = _artifact_step_name(request)
 
     record = {
         "request_id":      request.request_id,
@@ -100,9 +103,25 @@ def write_result(
         "errors":          result.errors,
     }
 
-    result_file = run_dir / "result.json"
+    result_file = run_artifact_path(results_root, step_name, run_timestamp, "result.json")
     _state = {"state_ctx": ctx, "app": "rey_analyzer", "pipeline": getattr(ctx, "pipeline_name", None) if ctx else None, "reason": "analyzed"}
     write_file(result_file, record, file_type="JSON", **_state)
+
+    context_file = run_artifact_path(results_root, step_name, run_timestamp, "context.json")
+    write_file(context_file, {
+        "request_id": request.request_id,
+        "run_id": request.run_id,
+        "source_name": request.source_name,
+        "analysis_name": request.analysis_name,
+        "input_file": str(request.file_path),
+        "input_hash": request.input_hash,
+        "contract_path": str(request.contract_path),
+        "contract_hash": request.contract_hash,
+        "schema_hash": request.schema_hash,
+        "idempotency_mode": request.idempotency_mode,
+        "status": result.status,
+        "errors": result.errors,
+    }, file_type="JSON", **_state)
 
     # The analysis result JSON is a run-created output; record it as an artifact on
     # the append-only run log (SGC_Rey_Log_Writer_Run_View_Groups) when a run context
@@ -114,10 +133,16 @@ def write_result(
             source_path=str(getattr(request, "file_path", "") or ""),
             viewer_type="file", safe_to_preview=True,
         )
+        log_artifact_reference(
+            ctx, str(context_file), role="analysis_context", event="written",
+            producer="analyzer", artifact_type="analysis_context",
+            source_path=str(getattr(request, "file_path", "") or ""),
+            viewer_type="file", safe_to_preview=True,
+        )
 
     _logger.info(
-        "result written: run_id=%s status=%s path=%s",
-        request.run_id, result.status, run_dir,
+        "result written: run_id=%s status=%s result=%s context=%s",
+        request.run_id, result.status, result_file, context_file,
     )
 
     if result.status == "success" and analysis_cfg is not None:
@@ -125,7 +150,20 @@ def write_result(
         if output_cfg is not None and getattr(output_cfg, "write_raw", False):
             _write_raw_output(request, result, source_cfg, ctx=ctx)
 
-    return run_dir
+    return results_root
+
+
+def _artifact_step_name(request: AnalysisRequest) -> str:
+    """Return a filesystem-safe step name for artifact filenames."""
+    raw = str(getattr(request, "analysis_name", "") or getattr(request, "source_name", "") or "").strip()
+    if not raw:
+        return "unknown_step"
+
+    # Replace separators and other filesystem-hostile characters, then compact runs.
+    safe = raw.replace("/", "_").replace("\\", "_")
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", safe)
+    safe = safe.strip(" ._")
+    return safe or "unknown_step"
 
 
 def _write_raw_output(
