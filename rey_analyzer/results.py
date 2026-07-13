@@ -129,12 +129,16 @@ def write_result(
     if ctx is not None:
         log_artifact_reference(
             ctx, str(result_file), role="analysis_result", event="written",
+            artifact_group="analysis_results", producing_app="rey_analyzer",
+            producing_step=_artifact_step_name(request),
             producer="analyzer", artifact_type="analysis_result",
             source_path=str(getattr(request, "file_path", "") or ""),
             viewer_type="file", safe_to_preview=True,
         )
         log_artifact_reference(
             ctx, str(context_file), role="analysis_context", event="written",
+            artifact_group="analysis_context", producing_app="rey_analyzer",
+            producing_step=_artifact_step_name(request),
             producer="analyzer", artifact_type="analysis_context",
             source_path=str(getattr(request, "file_path", "") or ""),
             viewer_type="file", safe_to_preview=True,
@@ -192,6 +196,8 @@ def _write_raw_output(
     if ctx is not None:
         log_artifact_reference(
             ctx, str(raw_file), role="raw_output", event="written",
+            artifact_group="analysis_results", producing_app="rey_analyzer",
+            producing_step=_artifact_step_name(request),
             producer="llm", artifact_type="llm_result",
             source_path=str(getattr(request, "file_path", "") or ""),
             viewer_type="file", safe_to_preview=True,
