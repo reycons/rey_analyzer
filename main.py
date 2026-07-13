@@ -33,6 +33,7 @@ from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, setup_logging
 from rey_lib.run_lifecycle import run_app_operation
+from rey_lib.logs import create_results_summary
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
 from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
@@ -75,6 +76,14 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001  — top-level safety net only
         handle_exception(log, exc, "Unexpected error in rey_analyzer")
         return 2
+
+    finally:
+        # Top-level owner (standalone run, not a pipeline step) explicitly creates the
+        # RESULTS_SUMMARY after its final RUN_COMPLETE — on success or failure. Pipeline
+        # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
+        # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
+        if not getattr(args, "ctx_file", None):
+            create_results_summary(ctx)
 
 
 def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
