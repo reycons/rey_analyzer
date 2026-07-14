@@ -33,7 +33,7 @@ from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import get_logger, log_artifact_manifest_from_run_log, setup_logging
 from rey_lib.run_lifecycle import run_app_operation
-from rey_lib.logs import create_results_summary
+from rey_lib.logs import finalize_run_log
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
 from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
@@ -84,7 +84,7 @@ def main() -> int:
         # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
         if not getattr(args, "ctx_file", None):
             try:
-                create_results_summary(ctx)
+                finalize_run_log(ctx.run_log_path)
             finally:
                 log_artifact_manifest_from_run_log(ctx)
 
