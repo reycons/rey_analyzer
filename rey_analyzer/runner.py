@@ -52,6 +52,7 @@ from rey_analyzer.error_utils import (
 )
 from rey_analyzer.preprocessor import build_incident_packet
 from rey_analyzer.requests import AnalysisRequest, build_request
+from rey_analyzer.evidence import emit_llm_evidence
 from rey_analyzer.results import build_artifact_store, write_result
 
 __all__ = ["run_all", "run_source", "run_analysis", "build_payload"]
@@ -277,6 +278,11 @@ def run_analysis(
         analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
         source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
         result      = analyzer.analyze(source, analysis_id=request.request_id)
+
+        # Emit per-analysis LLM evidence (LLM_CONTRACT + LLM_CONTEXT) from the
+        # values just used, before final run-log completion. Evidence never masks
+        # execution (SGC_Rey_Lib_Canonical_LLM_Package_And_Contract_Evidence).
+        emit_llm_evidence(ctx, request, result)
 
         write_result(request, result, source_cfg, analysis_cfg, ctx=ctx)
         log_validation_result(
