@@ -117,6 +117,56 @@ def test_run_source_logs_input_discovery_count(
     assert discovered["source_config"] == sample_source_cfg.name
 
 
+def test_consecutive_analyses_are_siblings_under_app(
+    sample_ctx: SimpleNamespace,
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+    tmp_path: Path,
+) -> None:
+    """Two files analyzed in one source run are siblings: their records share one
+    parent (the app anchor), rather than the second file chaining under the first
+    file's final record (SGC_Rey_Log_Hierarchy_Shared_Run_State_Correction)."""
+    from rey_analyzer.runner import run_source
+    from rey_lib.logs import set_nest_level
+    from rey_lib.logs.log_utils import log_run_record
+
+    object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
+    object.__setattr__(sample_ctx, "run_id", "r1")
+    object.__setattr__(sample_ctx, "run_timestamp", "20260709_000000")
+
+    inbox = Path(sample_source_cfg.paths.inbox_path)
+    inbox.mkdir(parents=True, exist_ok=True)
+    for name in ("file_a.jsonl", "file_b.jsonl"):
+        (inbox / name).write_text(
+            sample_jsonl_file.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    # The app boundary (run_app_operation) establishes app level before run_source.
+    set_nest_level(sample_ctx, "app")
+
+    def fake_run_analysis(ctx, source_cfg, analysis_cfg, file_path):
+        # Each analysis writes at the level run_source established once for the loop.
+        log_run_record(ctx, "INPUT_FILE_REFERENCE", display_name=file_path.name)
+        return "success"
+
+    with patch("rey_analyzer.runner.run_analysis", side_effect=fake_run_analysis):
+        run_source(sample_ctx, sample_source_cfg, sample_analysis_cfg)
+
+    records = [
+        json.loads(line)
+        for line in Path(sample_ctx.run_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    refs = [r for r in records if r["record_type"] == "INPUT_FILE_REFERENCE"]
+    assert len(refs) == 2
+    # Siblings: same parent and same analysis level.
+    assert refs[0]["parent_record_id"] == refs[1]["parent_record_id"]
+    assert refs[0]["nest_level"] == refs[1]["nest_level"]
+    # The second file is not parented under the first file's record.
+    assert refs[1]["parent_record_id"] != refs[0]["record_id"]
+
+
 def test_run_all_returns_failed_count_on_source_exception(
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,

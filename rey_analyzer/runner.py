@@ -204,6 +204,16 @@ def run_source(
 
     success = failed = pending = 0
 
+    # Enter the analysis-owned nested section once for this source run, before the
+    # file loop, so every file's analysis is a sibling at the same level sharing one
+    # parent: the app-level anchor. Descending per file would instead re-anchor each
+    # file under the previous file's final record, because the shared descent resolver
+    # parents each next() to the global last written record
+    # (SGC_Rey_Log_Hierarchy_Shared_Run_State_Correction). Writing records never moves
+    # the current parent, so it stays fixed on the app anchor across all files.
+    set_nest_level(ctx, "app")
+    next_nest_level(ctx)
+
     for file_path in files:
         status = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
         if status == "success":
@@ -254,13 +264,8 @@ def run_analysis(
     object.__setattr__(ctx, "source_name", source_cfg.name)
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
-    # Enter the analysis-owned nested section (SGC_Rey_Log_Nest_Level_Phase_1).
-    # Reset to the fixed app base first, then advance exactly one level, so every
-    # file's analysis is a sibling at the same analysis level rather than
-    # progressively deeper. No matching previous is needed: the next analysis
-    # resets to "app" again before incrementing, so the level cannot accumulate.
-    set_nest_level(ctx, "app")
-    next_nest_level(ctx)
+    # The analysis nest level is established once per source run (see run_source), so
+    # every file is a sibling under the app anchor; run_analysis does not re-descend.
     log_input_file_reference(
         ctx,
         str(file_path),
