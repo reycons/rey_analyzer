@@ -32,6 +32,8 @@ from rey_lib.files.file_utils import (
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
 from rey_lib.logs import (
     get_logger,
+    next_nest_level,
+    set_nest_level,
     log_input_discovered,
     log_input_file_reference,
     log_row_count,
@@ -252,6 +254,13 @@ def run_analysis(
     object.__setattr__(ctx, "source_name", source_cfg.name)
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
+    # Enter the analysis-owned nested section (SGC_Rey_Log_Nest_Level_Phase_1).
+    # Reset to the fixed app base first, then advance exactly one level, so every
+    # file's analysis is a sibling at the same analysis level rather than
+    # progressively deeper. No matching previous is needed: the next analysis
+    # resets to "app" again before incrementing, so the level cannot accumulate.
+    set_nest_level(ctx, "app")
+    next_nest_level(ctx)
     log_input_file_reference(
         ctx,
         str(file_path),
