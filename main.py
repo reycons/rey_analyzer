@@ -31,7 +31,12 @@ preparse_config_args()
 from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_from_args
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
-from rey_lib.logs import get_logger, log_artifact_manifest_from_run_log, setup_logging
+from rey_lib.logs import (
+    get_logger,
+    log_artifact_manifest_from_run_log,
+    next_nest_level,
+    setup_logging,
+)
 from rey_lib.run_lifecycle import run_app_operation
 from rey_lib.logs import finalize_run_log
 
@@ -91,6 +96,12 @@ def main() -> int:
 
 def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
     """Execute the selected analyzer command body."""
+    # Enter the analysis-owned scope once per app execution, at the boundary every
+    # command shares. run_app_operation has established the app base and written
+    # RUN_START, so that record anchors this scope and every analysis below it — for
+    # run, run-source, and submit-file alike — is a sibling beneath the app.
+    next_nest_level(ctx)
+
     if args.command == "run":
         success, failed, pending = run_all(ctx)
         log.info(

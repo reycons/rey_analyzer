@@ -32,8 +32,6 @@ from rey_lib.files.file_utils import (
 from rey_lib.llm.analysis import Analyzer, AnalysisResult
 from rey_lib.logs import (
     get_logger,
-    next_nest_level,
-    set_nest_level,
     log_input_discovered,
     log_input_file_reference,
     log_row_count,
@@ -204,16 +202,9 @@ def run_source(
 
     success = failed = pending = 0
 
-    # Enter the analysis-owned nested section once for this source run, before the
-    # file loop, so every file's analysis is a sibling at the same level sharing one
-    # parent: the app-level anchor. Descending per file would instead re-anchor each
-    # file under the previous file's final record, because the shared descent resolver
-    # parents each next() to the global last written record
-    # (SGC_Rey_Log_Hierarchy_Shared_Run_State_Correction). Writing records never moves
-    # the current parent, so it stays fixed on the app anchor across all files.
-    set_nest_level(ctx, "app")
-    next_nest_level(ctx)
-
+    # The analysis-owned scope is entered once per app execution at the command
+    # boundary (see main._execute_command), so every file's analysis here is a sibling
+    # anchored on the app's RUN_START. This function performs no nest-level transition.
     for file_path in files:
         status = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
         if status == "success":
