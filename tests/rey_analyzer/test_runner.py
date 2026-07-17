@@ -117,19 +117,16 @@ def test_run_source_logs_input_discovery_count(
     assert discovered["source_config"] == sample_source_cfg.name
 
 
-def test_consecutive_analyses_are_siblings_under_app(
+def test_two_file_analyses_create_sibling_input_branches(
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
     sample_jsonl_file: Path,
     tmp_path: Path,
 ) -> None:
-    """Two files analyzed in one source run are siblings: their records share one
-    parent (the app anchor), rather than the second file chaining under the first
-    file's final record (SGC_Rey_Log_Hierarchy_Shared_Run_State_Correction)."""
+    """Each input is a sibling anchor and owns its file-processing records."""
     from rey_analyzer.runner import run_source
     from rey_lib.logs import set_nest_level
-    from rey_lib.logs.log_utils import log_run_record
 
     object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
     object.__setattr__(sample_ctx, "run_id", "r1")
@@ -144,14 +141,10 @@ def test_consecutive_analyses_are_siblings_under_app(
 
     # The app boundary (run_app_operation) establishes app level before run_source.
     set_nest_level(sample_ctx, "app")
+    sample_source_cfg.move_files = False
 
-    def fake_run_analysis(ctx, source_cfg, analysis_cfg, file_path):
-        # Each analysis writes at the level run_source established once for the loop.
-        log_run_record(ctx, "INPUT_FILE_REFERENCE", display_name=file_path.name)
-        return "success"
-
-    with patch("rey_analyzer.runner.run_analysis", side_effect=fake_run_analysis):
-        run_source(sample_ctx, sample_source_cfg, sample_analysis_cfg)
+    with patch("rey_analyzer.runner.build_request", side_effect=RuntimeError("stop")):
+        assert run_source(sample_ctx, sample_source_cfg, sample_analysis_cfg) == (0, 2, 0)
 
     records = [
         json.loads(line)
@@ -165,6 +158,13 @@ def test_consecutive_analyses_are_siblings_under_app(
     assert refs[0]["nest_level"] == refs[1]["nest_level"]
     # The second file is not parented under the first file's record.
     assert refs[1]["parent_record_id"] != refs[0]["record_id"]
+    validations = [r for r in records if r["record_type"] == "VALIDATION_RESULT"]
+    by_input = {Path(r["input_file"]).name: r for r in validations}
+    for ref in refs:
+        validation = by_input[ref["display_name"]]
+        assert validation["parent_record_id"] == ref["record_id"]
+        assert validation["nest_level"] == ref["nest_level"] + 1
+    assert [r["record_id"] for r in records] == list(range(1, len(records) + 1))
 
 
 def test_run_all_returns_failed_count_on_source_exception(

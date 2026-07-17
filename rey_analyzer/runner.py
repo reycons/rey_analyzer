@@ -36,6 +36,9 @@ from rey_lib.logs import (
     log_input_file_reference,
     log_row_count,
     log_validation_result,
+    next_nest_level,
+    previous_nest_level,
+    set_nest_level,
 )
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.datasource import (
@@ -202,11 +205,13 @@ def run_source(
 
     success = failed = pending = 0
 
-    # The analysis-owned scope is entered once per app execution at the command
-    # boundary (see main._execute_command), so every file's analysis here is a sibling
-    # anchored on the app's RUN_START. This function performs no nest-level transition.
+    set_nest_level(ctx, "next")
     for file_path in files:
-        status = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
+        set_nest_level(ctx, "sibling")
+        try:
+            status = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
+        finally:
+            previous_nest_level(ctx)
         if status == "success":
             success += 1
         elif status == "pending_approval":
@@ -255,8 +260,6 @@ def run_analysis(
     object.__setattr__(ctx, "source_name", source_cfg.name)
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
-    # The analysis nest level is established once per source run (see run_source), so
-    # every file is a sibling under the app anchor; run_analysis does not re-descend.
     log_input_file_reference(
         ctx,
         str(file_path),
@@ -266,6 +269,7 @@ def run_analysis(
         analysis_name=analysis_cfg.name,
         input_type=getattr(source_cfg, "input_type", ""),
     )
+    next_nest_level(ctx)
 
     move_files = getattr(source_cfg, "move_files", True)
 

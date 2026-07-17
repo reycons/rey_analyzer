@@ -34,7 +34,7 @@ from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import (
     get_logger,
     log_artifact_manifest_from_run_log,
-    next_nest_level,
+    set_nest_level,
     setup_logging,
 )
 from rey_lib.run_lifecycle import run_app_operation
@@ -96,12 +96,6 @@ def main() -> int:
 
 def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
     """Execute the selected analyzer command body."""
-    # Enter the analysis-owned scope once per app execution, at the boundary every
-    # command shares. run_app_operation has established the app base and written
-    # RUN_START, so that record anchors this scope and every analysis below it — for
-    # run, run-source, and submit-file alike — is a sibling beneath the app.
-    next_nest_level(ctx)
-
     if args.command == "run":
         success, failed, pending = run_all(ctx)
         log.info(
@@ -128,6 +122,8 @@ def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
         file_path    = Path(args.file).expanduser().resolve()
+        set_nest_level(ctx, "next")
+        set_nest_level(ctx, "sibling")
         status       = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
         log.info("submit-file complete: status=%s", status)
         if status == "failed":
@@ -138,6 +134,8 @@ def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
         file_path    = Path(args.file).expanduser().resolve()
+        set_nest_level(ctx, "next")
+        set_nest_level(ctx, "sibling")
         status       = run_analysis(
             ctx, source_cfg, analysis_cfg, file_path,
         )
