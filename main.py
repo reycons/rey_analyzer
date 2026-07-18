@@ -42,6 +42,7 @@ from rey_lib.logs import finalize_run_log
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
 from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
+from rey_analyzer.workflow import run_process_workflow
 
 __all__: list[str] = []
 
@@ -94,6 +95,19 @@ def main() -> int:
                 log_artifact_manifest_from_run_log(ctx)
 
 
+def _run_workflow_command(ctx: Any, args: argparse.Namespace) -> int:
+    """Run an explicitly named analyzer workflow via the shared coordinator."""
+    if not getattr(args, "workflow", None):
+        raise AnalyzerError("run-workflow requires --workflow <name>.")
+    return run_process_workflow(
+        ctx,
+        args.workflow,
+        step=getattr(args, "step", None),
+        from_step=getattr(args, "from_step", None),
+        to_step=getattr(args, "to_step", None),
+    )
+
+
 def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
     """Execute the selected analyzer command body."""
     if args.command == "run":
@@ -117,6 +131,11 @@ def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
         if failed:
             log.error("run-source failed: %d file(s) failed.", failed)
             return 1
+
+    elif args.command == "run-workflow":
+        # Same application-operation lifecycle as run-source: the workflow merely
+        # controls which internal analyzer operations run and in what order.
+        return _run_workflow_command(ctx, args)
 
     elif args.command == "submit-file":
         source_cfg   = _resolve_source(ctx, args.source)
@@ -275,6 +294,16 @@ def _parse_args() -> argparse.Namespace:
 
     p_source = sub.add_parser("run-source", help="Process one named data source.")
     p_source.add_argument("--source", required=True, dest="source", help="Data source name.")
+
+    p_wf = sub.add_parser("run-workflow", help="Run a configured analyzer workflow.")
+    p_wf.add_argument("--workflow", required=True, dest="workflow",
+                      help="Workflow name defined under 'workflows' in rey_analyzer config.")
+    p_wf.add_argument("--step", dest="step", default=None,
+                      help="Run only the one step matching this id, label, or process.")
+    p_wf.add_argument("--from-step", dest="from_step", default=None,
+                      help="Run from the matching step through the end of the workflow.")
+    p_wf.add_argument("--to-step", dest="to_step", default=None,
+                      help="Run from the start of the workflow through the matching step.")
 
     p_submit = sub.add_parser("submit-file", help="Submit one file for analysis.")
     p_submit.add_argument("--source", required=True, help="Data source name.")
