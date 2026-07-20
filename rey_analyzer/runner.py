@@ -480,6 +480,9 @@ def _build_analyzer(
 ) -> Analyzer:
     """Construct an Analyzer for the given request."""
     artifact_store = build_artifact_store(ctx)
+    _eval = getattr(ctx, "llm_evaluation", None)
+    _payload_log = getattr(_eval, "payload_log_path", None) if _eval else None
+    _run_log = getattr(_eval, "run_log_path", None) if _eval else None
     return Analyzer(
         contract_path     = request.contract_path,
         provider          = llm_profile.provider,
@@ -490,6 +493,8 @@ def _build_analyzer(
         artifact_store    = artifact_store,
         requires_approval = request.requires_approval,
         artifact_processing = artifact_config_from_ctx(ctx),
+        eval_payload_log_path = Path(_payload_log) if _payload_log else None,
+        eval_run_log_path     = Path(_run_log) if _run_log else None,
     )
 
 
