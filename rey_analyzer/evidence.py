@@ -100,11 +100,25 @@ def build_analysis_package(ctx: Any, request: Any, result: Any) -> dict[str, Any
         "pipeline": str(getattr(ctx, "pipeline_name", "") or ""),
     }
 
+    # The contract may declare reference documents; resolve and attach their full
+    # contents as a sibling of the contract section, reusing the shared rey_lib
+    # reference loader (existing path-token resolver + approved text loader).
+    from rey_lib.logs.llm_package import load_contract_references
+
+    declared_references = None
+    if contract_path:
+        try:
+            from rey_lib.llm.contract import load as _load_contract
+            declared_references = _load_contract(contract_path).raw_frontmatter.get("references")
+        except Exception as exc:  # pragma: no cover - evidence never masks execution
+            _logger.warning("Contract references unavailable for evidence: %s", exc)
+
     return build_package(
         analysis={"name": analysis_name, "run_id": execution_context["run_id"]},
         contract=contract,
         inputs=inputs,
         execution_context=execution_context,
+        references=load_contract_references(ctx, declared_references),
     )
 
 
