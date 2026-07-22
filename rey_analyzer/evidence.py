@@ -7,7 +7,7 @@ analysis request already carries every canonical field — the source file, its
 hash, the resolved contract path and hash, and the analysis identity — so the
 package is assembled from already-resolved evidence rather than reconstructed.
 
-This module builds that canonical package for one single-input analysis and emits
+This module builds that canonical package for an analysis invocation and emits
 two durable run-log records at execution time:
 
   LLM_CONTRACT  the exact resolved contract used (path + hash + identity).
@@ -32,18 +32,23 @@ from rey_lib.logs import get_logger, log_run_record
 
 _logger = get_logger(__name__)
 
-# The single logical input a rey_analyzer analysis supplies. Named for lineage;
-# rey_analyzer remains exactly one input per analysis under this SGC.
+# The default logical input a rey_analyzer analysis supplies. Named for lineage.
 _ANALYSIS_INPUT_NAME = "analysis_input"
 
 
-def build_analysis_package(ctx: Any, request: Any, result: Any) -> dict[str, Any]:
-    """Build the canonical LLM package for one single-input analysis.
+def build_analysis_package(
+    ctx: Any,
+    request: Any,
+    result: Any,
+    *,
+    inputs: list[LlmPackageInput] | None = None,
+) -> dict[str, Any]:
+    """Build the canonical LLM package for an analysis invocation.
 
-    The contract stays structurally separate from ``inputs``, and ``inputs`` is a
-    one-entry collection — the current rey_analyzer cardinality. Content and the
-    contract hash come from already-resolved request evidence and the shared file
-    utilities; nothing is re-resolved.
+    The contract stays structurally separate from ``inputs``. Callers may supply
+    the exact logical inputs sent to the provider; otherwise the existing single
+    prepared analysis input is projected. Content and the contract hash come from
+    already-resolved request evidence and the shared file utilities.
 
     Parameters
     ----------
@@ -78,18 +83,17 @@ def build_analysis_package(ctx: Any, request: Any, result: Any) -> dict[str, Any
         content=contract_content,
     )
 
-    # Exactly one input: the analyzed source file, carrying the payload actually
-    # supplied to the provider (the prepared text), captured at execution time.
-    prepared = getattr(result, "prepared", None)
-    payload_text = str(getattr(prepared, "rendered_text", "") or "")
-    inputs = [
-        LlmPackageInput(
-            source_path=str(getattr(request, "file_path", "") or ""),
-            content=payload_text,
-            input_hash=str(getattr(request, "input_hash", "") or ""),
-            name=_ANALYSIS_INPUT_NAME,
-        )
-    ]
+    if inputs is None:
+        prepared = getattr(result, "prepared", None)
+        payload_text = str(getattr(prepared, "rendered_text", "") or "")
+        inputs = [
+            LlmPackageInput(
+                source_path=str(getattr(request, "file_path", "") or ""),
+                content=payload_text,
+                input_hash=str(getattr(request, "input_hash", "") or ""),
+                name=_ANALYSIS_INPUT_NAME,
+            )
+        ]
 
     execution_context = {
         "run_id": str(getattr(ctx, "run_id", "") or ""),
@@ -137,7 +141,13 @@ def _correlation_fields(request: Any) -> dict[str, Any]:
     }
 
 
-def emit_llm_evidence(ctx: Any, request: Any, result: Any) -> dict[str, Any]:
+def emit_llm_evidence(
+    ctx: Any,
+    request: Any,
+    result: Any,
+    *,
+    inputs: list[LlmPackageInput] | None = None,
+) -> dict[str, Any]:
     """Emit LLM_CONTRACT and LLM_CONTEXT for one analysis invocation.
 
     Called after the analyzer returns, so the evidence is captured at execution
@@ -150,7 +160,7 @@ def emit_llm_evidence(ctx: Any, request: Any, result: Any) -> dict[str, Any]:
         The canonical package that was emitted as LLM_CONTEXT.
     """
     try:
-        package = build_analysis_package(ctx, request, result)
+        package = build_analysis_package(ctx, request, result, inputs=inputs)
         correlation = _correlation_fields(request)
 
         # LLM_CONTRACT: the exact resolved contract used for this analysis.

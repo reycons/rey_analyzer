@@ -93,6 +93,10 @@ def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
 
     write_result(request, result, source_cfg, analysis_cfg=analysis_cfg, ctx=ctx)
 
+    raw_files = list((tmp_path / "raw").rglob("*.yaml"))
+    assert len(raw_files) == 1
+    assert raw_files[0].read_text(encoding="utf-8") == result.raw_text
+
     records = [json.loads(line)
                for line in Path(ctx.run_log_path).read_text(encoding="utf-8").splitlines()]
     raw = next(r for r in records

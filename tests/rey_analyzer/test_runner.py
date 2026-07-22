@@ -217,3 +217,77 @@ def test_run_analysis_moves_to_failed_on_exception(
     assert input_ref["path"] == str(file_in_inbox)
     assert validation["validation_name"] == "analysis_result"
     assert validation["status"] == "failed"
+
+
+def test_run_analysis_supplies_resolved_file_set_as_second_input(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """A contract requiring file_set values receives them beside the profile."""
+    import rey_analyzer.runner as runner
+
+    profile = tmp_path / "profile.json"
+    profile.write_text('{"source":"example","columns":[]}', encoding="utf-8")
+    request = SimpleNamespace(
+        request_id="req-1",
+        input_hash="profile-hash",
+        contract_hash="contract-hash",
+        contract_path=tmp_path / "contract.yaml",
+        analysis_name="loader_config",
+        source_name="profile_source",
+        llm_profile_name="profile",
+        requires_approval=False,
+    )
+    request.contract_path.write_text("name: c\nversion: 1\n", encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    class FakeAnalyzer:
+        contract = SimpleNamespace(base=SimpleNamespace(raw_frontmatter={
+            "file_set": {
+                "required_values": ["target_connection", "loader_inbox_path"],
+            },
+        }))
+
+        def analyze(self, source, analysis_id):  # noqa: ANN001, ANN201
+            captured["provider_input"] = source.extract().raw_text
+            return SimpleNamespace(status="success", prepared=None, record=None)
+
+    ctx = SimpleNamespace(
+        pipeline_name="pipeline",
+        pipelines=[SimpleNamespace(
+            name="pipeline",
+            tokens=SimpleNamespace(
+                target_connection="rey_apps",
+                loader_inbox_path="/resolved/inbox",
+            ),
+        )],
+    )
+    source_cfg = SimpleNamespace(name="source", input_type="json_file", move_files=False)
+    analysis_cfg = SimpleNamespace(name="loader_config")
+
+    monkeypatch.setattr(runner, "build_request", lambda *_a, **_k: request)
+    monkeypatch.setattr(runner, "_resolve_llm_profile", lambda *_a: object())
+    monkeypatch.setattr(runner, "_build_analyzer", lambda *_a: FakeAnalyzer())
+    monkeypatch.setattr(runner, "write_result", lambda *_a, **_k: None)
+    monkeypatch.setattr(runner, "log_input_file_reference", lambda *_a, **_k: None)
+    monkeypatch.setattr(runner, "next_nest_level", lambda *_a, **_k: None)
+    monkeypatch.setattr(runner, "log_validation_result", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        runner,
+        "emit_llm_evidence",
+        lambda *_a, **kwargs: captured.update(evidence_inputs=kwargs["inputs"]),
+    )
+
+    assert runner.run_analysis(ctx, source_cfg, analysis_cfg, profile) == "success"
+
+    provider_package = json.loads(str(captured["provider_input"]))
+    assert [item["name"] for item in provider_package["inputs"]] == [
+        "analysis_input", "file_set",
+    ]
+    assert provider_package["inputs"][1]["content"] == {
+        "target_connection": "rey_apps",
+        "loader_inbox_path": "/resolved/inbox",
+    }
+    evidence_inputs = captured["evidence_inputs"]
+    assert [item.name for item in evidence_inputs] == ["analysis_input", "file_set"]

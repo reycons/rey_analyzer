@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import rey_analyzer.evidence as evidence
 from rey_analyzer.evidence import build_analysis_package, emit_llm_evidence
+from rey_lib.llm.package import LlmPackageInput
 
 
 def _request(tmp_path: Path) -> SimpleNamespace:
@@ -75,6 +76,23 @@ def test_context_input_is_the_payload_actually_supplied(tmp_path: Path) -> None:
     entry = package["inputs"][0]
     assert entry["content"] == "| a |\n| - |\n| 1 |"       # result.prepared.rendered_text
     assert entry["input_hash"] == "inhash"
+
+
+def test_context_preserves_supplied_profile_and_file_set_inputs(tmp_path: Path) -> None:
+    """Explicit provider inputs are retained as separate LLM_CONTEXT inputs."""
+    inputs = [
+        LlmPackageInput(source_path="profile.json", content='{"columns": []}', name="analysis_input"),
+        LlmPackageInput(source_path="", content={"target_connection": "rey_apps"}, name="file_set"),
+    ]
+
+    package = build_analysis_package(
+        _ctx(), _request(tmp_path), _result(), inputs=inputs
+    )
+
+    assert [entry["name"] for entry in package["inputs"]] == [
+        "analysis_input", "file_set",
+    ]
+    assert package["inputs"][1]["content"] == {"target_connection": "rey_apps"}
 
 
 # TEST-005 / TEST-006A / AC-008 / AC-009C
