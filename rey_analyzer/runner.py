@@ -190,7 +190,7 @@ def run_source(
             raise SourceError(
                 f"source '{source_cfg.name}': no input files matched "
                 f"'{pattern}' in {inbox}. This step requires input produced by "
-                "an upstream step. Confirm the upstream step (e.g. file_redactor) "
+                "an upstream step. Confirm the upstream step (e.g. file_operator) "
                 "ran successfully and that the inbox path and redact.yaml are correct."
             )
         _logger.info("source '%s': inbox is empty.", source_cfg.name)
