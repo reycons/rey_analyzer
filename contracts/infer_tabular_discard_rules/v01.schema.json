@@ -1,0 +1,426 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "rey://rey_analyzer/infer_tabular_discard_rules/v01",
+  "title": "File Operator structural discard-rule candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "file_type",
+    "tables",
+    "unresolved_ambiguities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "file_type": {
+      "type": "string",
+      "pattern": "^file_type_[0-9a-f]{16}$"
+    },
+    "tables": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/definitions/table"
+      }
+    },
+    "unresolved_ambiguities": {
+      "type": "array",
+      "maxItems": 0
+    }
+  },
+  "definitions": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_file",
+          "physical_line_number"
+        ],
+        "properties": {
+          "source_file": {
+            "$ref": "#/definitions/non_empty_string"
+          },
+          "physical_line_number": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "field_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "values",
+        "case_sensitive",
+        "trim_fields"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "exact_fields",
+            "contains_fields"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/definitions/non_empty_string"
+          }
+        },
+        "case_sensitive": {
+          "type": "boolean"
+        },
+        "trim_fields": {
+          "type": "boolean"
+        }
+      }
+    },
+    "repeated_header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comparison",
+        "action",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "comparison": {
+          "const": "normalized_exact"
+        },
+        "action": {
+          "const": "drop"
+        },
+        "evidence": {
+          "$ref": "#/definitions/evidence"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "match",
+        "keep_first",
+        "repeated",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "match": {
+          "$ref": "#/definitions/field_match"
+        },
+        "keep_first": {
+          "const": true
+        },
+        "repeated": {
+          "$ref": "#/definitions/repeated_header"
+        },
+        "evidence": {
+          "$ref": "#/definitions/evidence"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "type": {
+          "const": "header"
+        },
+        "evidence": {
+          "$ref": "#/definitions/evidence"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "end": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "evidence",
+            "confidence"
+          ],
+          "properties": {
+            "type": {
+              "const": "eof"
+            },
+            "evidence": {
+              "$ref": "#/definitions/evidence"
+            },
+            "confidence": {
+              "$ref": "#/definitions/confidence"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "match",
+            "evidence",
+            "confidence"
+          ],
+          "properties": {
+            "type": {
+              "const": "before_match"
+            },
+            "match": {
+              "$ref": "#/definitions/field_match"
+            },
+            "evidence": {
+              "$ref": "#/definitions/evidence"
+            },
+            "confidence": {
+              "$ref": "#/definitions/confidence"
+            }
+          }
+        }
+      ]
+    },
+    "standard_row_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "order",
+        "action",
+        "standard",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/non_empty_string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "action": {
+          "const": "drop"
+        },
+        "standard": {
+          "enum": [
+            "blank",
+            "repeated_header"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/definitions/evidence"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "contains_row_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "order",
+        "action",
+        "match",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/non_empty_string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "action": {
+          "const": "drop"
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value",
+            "case_sensitive"
+          ],
+          "properties": {
+            "type": {
+              "const": "contains"
+            },
+            "value": {
+              "$ref": "#/definitions/non_empty_string"
+            },
+            "case_sensitive": {
+              "type": "boolean"
+            }
+          }
+        },
+        "evidence": {
+          "$ref": "#/definitions/evidence"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "regex_row_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "order",
+        "action",
+        "match",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/non_empty_string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "action": {
+          "const": "drop"
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "pattern",
+            "flags"
+          ],
+          "properties": {
+            "type": {
+              "const": "regex"
+            },
+            "pattern": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^(?!.*\\.\\*)(?!.*\\.\\+)(?!.*\\[[^]]+\\][*+])(?!.*\\([^)]*\\)[*+]).+$"
+            },
+            "flags": {
+              "type": "array",
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "IGNORECASE",
+                  "MULTILINE"
+                ]
+              }
+            }
+          }
+        },
+        "evidence": {
+          "$ref": "#/definitions/evidence"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "row_rule": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/standard_row_rule"
+        },
+        {
+          "$ref": "#/definitions/contains_row_rule"
+        },
+        {
+          "$ref": "#/definitions/regex_row_rule"
+        }
+      ]
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "expected_columns",
+        "header",
+        "start",
+        "end",
+        "row_rules"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/non_empty_string"
+        },
+        "expected_columns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/non_empty_string"
+          }
+        },
+        "header": {
+          "$ref": "#/definitions/header"
+        },
+        "start": {
+          "$ref": "#/definitions/start"
+        },
+        "end": {
+          "$ref": "#/definitions/end"
+        },
+        "row_rules": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/definitions/row_rule"
+          }
+        }
+      }
+    }
+  }
+}
