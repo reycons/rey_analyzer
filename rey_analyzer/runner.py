@@ -288,25 +288,6 @@ def run_analysis(
         processing = move_to_processing(file_path, source_cfg, **_move_kwargs) if move_files else file_path
 
         llm_profile = _resolve_llm_profile(ctx, request.llm_profile_name)
-        log_validation_result(
-            ctx,
-            validation_name="analyzer_execution_contract",
-            status="passed",
-            message=(
-                f"Resolved governed Analyzer execution for "
-                f"'{request.analysis_name}'."
-            ),
-            source_name=request.source_name,
-            analysis_name=request.analysis_name,
-            input_file=str(request.file_path),
-            input_hash=request.input_hash,
-            contract_path=str(request.contract_path),
-            contract_hash=request.contract_hash,
-            schema_hash=request.schema_hash,
-            model_profile=request.llm_profile_name,
-            provider=str(getattr(llm_profile, "provider", "") or ""),
-            model=str(getattr(llm_profile, "model", "") or ""),
-        )
         analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
         source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
         analysis_inputs = None

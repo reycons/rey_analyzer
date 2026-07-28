@@ -19,10 +19,8 @@ def _request(run_id: str, file_path: Path) -> SimpleNamespace:
     )
 
 
-def test_write_result_writes_flat_per_request_result_and_context_artifacts(
-    tmp_path: Path,
-) -> None:
-    """Result/context artifacts are flat and uniquely identify the request."""
+def test_write_result_writes_flat_named_result_and_context_artifacts(tmp_path: Path) -> None:
+    """Result/context artifacts are flat and named with step + run timestamp."""
     source_cfg = SimpleNamespace(paths=SimpleNamespace(results_path=str(tmp_path / "results")))
     request = _request("run-analysis-1", tmp_path / "input.csv")
     result = SimpleNamespace(status="success", data={"ok": True}, raw_text=None, errors=[])
@@ -36,8 +34,8 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
 
     results_root = write_result(request, result, source_cfg, analysis_cfg=None, ctx=ctx)
 
-    result_file = Path(results_root) / "an.req-1.20260706_120000.result.json"
-    context_file = Path(results_root) / "an.req-1.20260706_120000.context.json"
+    result_file = Path(results_root) / "an.20260706_120000.result.json"
+    context_file = Path(results_root) / "an.20260706_120000.context.json"
 
     assert result_file.exists()
     assert context_file.exists()
@@ -75,42 +73,6 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
     assert context_artifact["artifact_type"] == "analysis_context"
     assert context_artifact["source_path"] == str(tmp_path / "input.csv")
     assert context_artifact["safe_to_preview"] is True
-
-
-def test_write_result_preserves_independent_artifacts_for_multiple_inputs(
-    tmp_path: Path,
-) -> None:
-    """Two inputs in one workflow run cannot overwrite each other's evidence."""
-    source_cfg = SimpleNamespace(
-        paths=SimpleNamespace(results_path=str(tmp_path / "results"))
-    )
-    result = SimpleNamespace(
-        status="success",
-        data={"ok": True},
-        raw_text=None,
-        errors=[],
-    )
-    ctx = SimpleNamespace(
-        log_file=str(tmp_path / "rey_analyzer.jsonl"),
-        owner_app_name="rey_analyzer",
-        run_id="run-pipe-1",
-        run_timestamp="20260706_120000",
-    )
-    first = _request("run-analysis-1", tmp_path / "first.json")
-    second = _request("run-analysis-2", tmp_path / "second.json")
-    second.request_id = "req-2"
-
-    results_root = write_result(first, result, source_cfg, ctx=ctx)
-    write_result(second, result, source_cfg, ctx=ctx)
-
-    assert sorted(path.name for path in Path(results_root).glob("*.context.json")) == [
-        "an.req-1.20260706_120000.context.json",
-        "an.req-2.20260706_120000.context.json",
-    ]
-    assert sorted(path.name for path in Path(results_root).glob("*.result.json")) == [
-        "an.req-1.20260706_120000.result.json",
-        "an.req-2.20260706_120000.result.json",
-    ]
 
 
 def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:

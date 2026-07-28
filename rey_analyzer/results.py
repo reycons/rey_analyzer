@@ -84,7 +84,7 @@ def write_result(
     results_root.mkdir(parents=True, exist_ok=True)
 
     run_timestamp = str(getattr(ctx, "run_timestamp", "") or "").strip() or "unknown_time"
-    artifact_name = _result_artifact_name(request)
+    step_name = _artifact_step_name(request)
 
     record = {
         "request_id":      request.request_id,
@@ -103,21 +103,11 @@ def write_result(
         "errors":          result.errors,
     }
 
-    result_file = run_artifact_path(
-        results_root,
-        artifact_name,
-        run_timestamp,
-        "result.json",
-    )
+    result_file = run_artifact_path(results_root, step_name, run_timestamp, "result.json")
     _state = {"state_ctx": ctx, "app": "rey_analyzer", "pipeline": getattr(ctx, "pipeline_name", None) if ctx else None, "reason": "analyzed"}
     write_file(result_file, record, file_type="JSON", **_state)
 
-    context_file = run_artifact_path(
-        results_root,
-        artifact_name,
-        run_timestamp,
-        "context.json",
-    )
+    context_file = run_artifact_path(results_root, step_name, run_timestamp, "context.json")
     write_file(context_file, {
         "request_id": request.request_id,
         "run_id": request.run_id,
@@ -178,16 +168,6 @@ def _artifact_step_name(request: AnalysisRequest) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", safe)
     safe = safe.strip(" ._")
     return safe or "unknown_step"
-
-
-def _result_artifact_name(request: AnalysisRequest) -> str:
-    """Return a stable per-request name for result and context artifacts."""
-    request_id = str(getattr(request, "request_id", "") or "").strip()
-    safe_request_id = re.sub(r"[^A-Za-z0-9._-]+", "_", request_id)
-    safe_request_id = safe_request_id.strip(" ._")
-    if not safe_request_id:
-        raise ValueError("Analyzer result artifacts require a request_id.")
-    return f"{_artifact_step_name(request)}.{safe_request_id}"
 
 
 def _write_raw_output(
