@@ -232,7 +232,9 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(
         request_id="req-1",
         input_hash="profile-hash",
         contract_hash="contract-hash",
+        schema_hash="schema-hash",
         contract_path=tmp_path / "contract.yaml",
+        file_path=profile,
         analysis_name="loader_config",
         source_name="profile_source",
         llm_profile_name="profile",
@@ -241,6 +243,7 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(
     request.contract_path.write_text("name: c\nversion: 1\n", encoding="utf-8")
 
     captured: dict[str, object] = {}
+    validations: list[dict[str, object]] = []
 
     class FakeAnalyzer:
         contract = SimpleNamespace(base=SimpleNamespace(raw_frontmatter={
@@ -267,12 +270,20 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(
     analysis_cfg = SimpleNamespace(name="loader_config")
 
     monkeypatch.setattr(runner, "build_request", lambda *_a, **_k: request)
-    monkeypatch.setattr(runner, "_resolve_llm_profile", lambda *_a: object())
+    monkeypatch.setattr(
+        runner,
+        "_resolve_llm_profile",
+        lambda *_a: SimpleNamespace(provider="provider", model="model"),
+    )
     monkeypatch.setattr(runner, "_build_analyzer", lambda *_a: FakeAnalyzer())
     monkeypatch.setattr(runner, "write_result", lambda *_a, **_k: None)
     monkeypatch.setattr(runner, "log_input_file_reference", lambda *_a, **_k: None)
     monkeypatch.setattr(runner, "next_nest_level", lambda *_a, **_k: None)
-    monkeypatch.setattr(runner, "log_validation_result", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        runner,
+        "log_validation_result",
+        lambda *_a, **kwargs: validations.append(kwargs),
+    )
     monkeypatch.setattr(
         runner,
         "emit_llm_evidence",
@@ -291,3 +302,23 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(
     }
     evidence_inputs = captured["evidence_inputs"]
     assert [item.name for item in evidence_inputs] == ["analysis_input", "file_set"]
+    execution = next(
+        item
+        for item in validations
+        if item["validation_name"] == "analyzer_execution_contract"
+    )
+    assert execution == {
+        "validation_name": "analyzer_execution_contract",
+        "status": "passed",
+        "message": "Resolved governed Analyzer execution for 'loader_config'.",
+        "source_name": "profile_source",
+        "analysis_name": "loader_config",
+        "input_file": str(profile),
+        "input_hash": "profile-hash",
+        "contract_path": str(request.contract_path),
+        "contract_hash": "contract-hash",
+        "schema_hash": "schema-hash",
+        "model_profile": "profile",
+        "provider": "provider",
+        "model": "model",
+    }
