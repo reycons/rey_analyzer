@@ -33,9 +33,6 @@ from rey_analyzer.error_utils import ConfigurationError, SourceError
 
 __all__ = ["AnalysisRequest", "build_request"]
 
-_PROJECT_ROOT = Path(__file__).parent.parent
-
-
 @dataclass(frozen=True)
 class AnalysisRequest:
     """
@@ -106,9 +103,8 @@ def build_request(
     file_path : Path
         Absolute path to the file to be analyzed (in inbox or processing).
     ctx : Any, optional
-        Application context. When provided, ``ctx.contracts_root`` is used
-        as the base directory for resolving relative contract paths. Falls
-        back to the app project root when absent or when the path is absolute.
+        Application context providing the installation-owned
+        ``ctx.contracts_root`` used to resolve contract paths.
 
     Returns
     -------
@@ -227,16 +223,15 @@ def _hash_bytes(data: bytes) -> str:
 
 
 def _contracts_root(ctx: Any) -> Path:
-    """Return the base directory for resolving contract paths.
+    """Return the explicitly configured installation-owned contract root."""
 
-    Priority: ``ctx.contracts_root`` (configured per installation) →
-    ``_PROJECT_ROOT`` (app directory fallback).
-    """
-    if ctx is not None:
-        root = getattr(ctx, "contracts_root", None)
-        if root:
-            return Path(str(root)).expanduser().resolve()
-    return _PROJECT_ROOT
+    root = getattr(ctx, "contracts_root", None) if ctx is not None else None
+    if not root:
+        raise ConfigurationError(
+            "Rey Analyzer requires installation-owned 'contracts_root'; "
+            "application-relative contract fallback is prohibited."
+        )
+    return Path(str(root)).expanduser().resolve()
 
 
 def _resolve_path(relative: str | None, label: str, base: Path) -> Path:

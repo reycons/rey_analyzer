@@ -15,7 +15,7 @@ def _request(run_id: str, file_path: Path) -> SimpleNamespace:
         run_id=run_id, request_id="req-1", source_name="src",
         analysis_name="an", file_path=file_path, input_hash="ih",
         contract_path=Path("contract.md"), contract_hash="ch",
-        schema_hash="sh", idempotency_mode="strict",
+        schema_hash="sh", idempotency_mode="strict", llm_profile_name="precision",
     )
 
 
@@ -34,18 +34,40 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
         run_timestamp="20260706_120000",
     )
 
-    results_root = write_result(request, result, source_cfg, analysis_cfg=None, ctx=ctx)
+    artifacts = write_result(
+        request,
+        result,
+        source_cfg,
+        analysis_cfg=None,
+        ctx=ctx,
+        workflow_name="governed_workflow",
+        provider="local",
+        model="test-model",
+    )
 
-    result_file = Path(results_root) / "an.req-1.20260706_120000.result.json"
-    context_file = Path(results_root) / "an.req-1.20260706_120000.context.json"
+    result_file = artifacts.result_path
+    context_file = artifacts.context_path
 
     assert result_file.exists()
     assert context_file.exists()
-    assert not (Path(results_root) / request.run_id).exists()
+    assert not (result_file.parent / request.run_id).exists()
 
     context_record = json.loads(context_file.read_text(encoding="utf-8"))
     assert context_record["analysis_name"] == "an"
     assert context_record["run_id"] == "run-analysis-1"
+    assert context_record["workflow_name"] == "governed_workflow"
+    assert context_record["model_profile"] == "precision"
+    assert context_record["provider"] == "local"
+    assert context_record["model"] == "test-model"
+    assert context_record["source_artifact_path"] == str(tmp_path / "input.csv")
+    assert context_record["source_artifact_sha256"] == "ih"
+    assert context_record["contract_path"] == "contract.md"
+    assert context_record["contract_hash"] == "ch"
+    assert context_record["request_id"] == "req-1"
+    assert context_record["result_artifact_path"] == str(result_file)
+    assert context_record["result_artifact_sha256"] == artifacts.result_sha256
+    assert context_record["candidate_artifact_path"] is None
+    assert context_record["candidate_artifact_sha256"] is None
 
     records = [
         json.loads(line)
@@ -100,8 +122,9 @@ def test_write_result_preserves_independent_artifacts_for_multiple_inputs(
     second = _request("run-analysis-2", tmp_path / "second.json")
     second.request_id = "req-2"
 
-    results_root = write_result(first, result, source_cfg, ctx=ctx)
+    first_artifacts = write_result(first, result, source_cfg, ctx=ctx)
     write_result(second, result, source_cfg, ctx=ctx)
+    results_root = first_artifacts.result_path.parent
 
     assert sorted(path.name for path in Path(results_root).glob("*.context.json")) == [
         "an.req-1.20260706_120000.context.json",
@@ -129,11 +152,20 @@ def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
         run_id="run-pipe-2", run_timestamp="20260708_000000",
     )
 
-    write_result(request, result, source_cfg, analysis_cfg=analysis_cfg, ctx=ctx)
+    artifacts = write_result(
+        request,
+        result,
+        source_cfg,
+        analysis_cfg=analysis_cfg,
+        ctx=ctx,
+    )
 
     raw_files = list((tmp_path / "raw").rglob("*.yaml"))
     assert len(raw_files) == 1
     assert raw_files[0].read_text(encoding="utf-8") == result.raw_text
+    context = json.loads(artifacts.context_path.read_text(encoding="utf-8"))
+    assert context["candidate_artifact_path"] == str(raw_files[0])
+    assert context["candidate_artifact_sha256"] == artifacts.candidate_sha256
 
     records = [json.loads(line)
                for line in Path(ctx.run_log_path).read_text(encoding="utf-8").splitlines()]

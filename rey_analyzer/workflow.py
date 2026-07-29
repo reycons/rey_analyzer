@@ -77,7 +77,12 @@ def _process_analysis(ctx: Any, config: dict[str, Any], run: RunContext) -> Step
 
     source_cfg = _resolve_source(ctx, source_name)
     analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-    success, failed, pending = run_source(ctx, source_cfg, analysis_cfg)
+    success, failed, pending = run_source(
+        ctx,
+        source_cfg,
+        analysis_cfg,
+        workflow_name=str(run.metadata.get("workflow") or ""),
+    )
 
     run.metadata[f"analysis:{source_name}"] = {
         "success": success, "failed": failed, "pending": pending,

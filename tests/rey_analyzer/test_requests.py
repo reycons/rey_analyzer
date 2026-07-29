@@ -11,6 +11,8 @@ import rey_analyzer.requests as requests_mod
 from rey_analyzer.error_utils import ConfigurationError, SourceError
 from rey_analyzer.requests import _compute_request_id, _hash_bytes, build_request
 
+_CONTRACT_ROOT = Path(__file__).parents[2]
+
 
 def test_hash_bytes_is_sha256_hex(tmp_path: Path) -> None:
     """_hash_bytes returns a 64-char hex string."""
@@ -69,7 +71,12 @@ def test_build_request_missing_contract_raises_config_error(
         schema            = None,
     )
     with pytest.raises(ConfigurationError):
-        build_request(sample_source_cfg, bad_cfg, sample_jsonl_file)
+        build_request(
+            sample_source_cfg,
+            bad_cfg,
+            sample_jsonl_file,
+            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+        )
 
 
 def test_build_request_no_contract_field_raises_config_error(
@@ -86,7 +93,12 @@ def test_build_request_no_contract_field_raises_config_error(
         schema            = None,
     )
     with pytest.raises(ConfigurationError):
-        build_request(sample_source_cfg, cfg, sample_jsonl_file)
+        build_request(
+            sample_source_cfg,
+            cfg,
+            sample_jsonl_file,
+            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+        )
 
 
 def test_build_request_uses_llm_execution_profile(
@@ -102,7 +114,12 @@ def test_build_request_uses_llm_execution_profile(
         lambda path: SimpleNamespace(hash="contract_hash"),
     )
 
-    req = build_request(sample_source_cfg, sample_analysis_cfg, sample_jsonl_file)
+    req = build_request(
+        sample_source_cfg,
+        sample_analysis_cfg,
+        sample_jsonl_file,
+        ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+    )
 
     assert req.llm_profile_name == "primary"
 
@@ -123,7 +140,12 @@ def test_build_request_accepts_legacy_llm_profile(
     delattr(legacy_cfg, "llm_execution_profile")
     legacy_cfg.llm_profile = "legacy_primary"
 
-    req = build_request(sample_source_cfg, legacy_cfg, sample_jsonl_file)
+    req = build_request(
+        sample_source_cfg,
+        legacy_cfg,
+        sample_jsonl_file,
+        ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+    )
 
     assert req.llm_profile_name == "legacy_primary"
 
@@ -138,7 +160,12 @@ def test_build_request_rejects_both_execution_profile_fields(
     bad_cfg.llm_profile = "legacy_primary"
 
     with pytest.raises(ConfigurationError, match="both 'llm_execution_profile'"):
-        build_request(sample_source_cfg, bad_cfg, sample_jsonl_file)
+        build_request(
+            sample_source_cfg,
+            bad_cfg,
+            sample_jsonl_file,
+            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+        )
 
 
 def test_build_request_requires_execution_profile(
@@ -151,4 +178,23 @@ def test_build_request_requires_execution_profile(
     delattr(bad_cfg, "llm_execution_profile")
 
     with pytest.raises(ConfigurationError, match="missing required 'llm_execution_profile'"):
-        build_request(sample_source_cfg, bad_cfg, sample_jsonl_file)
+        build_request(
+            sample_source_cfg,
+            bad_cfg,
+            sample_jsonl_file,
+            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+        )
+
+
+def test_missing_installation_contract_root_has_no_app_fallback(
+    sample_source_cfg: SimpleNamespace,
+    sample_analysis_cfg: SimpleNamespace,
+    sample_jsonl_file: Path,
+) -> None:
+    with pytest.raises(ConfigurationError, match="contracts_root"):
+        build_request(
+            sample_source_cfg,
+            sample_analysis_cfg,
+            sample_jsonl_file,
+            ctx=SimpleNamespace(),
+        )

@@ -15,19 +15,32 @@ write_result            Write result artifacts for a completed analysis.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rey_lib.files.file_utils import run_artifact_path, write_file
+from rey_lib.files.file_utils import file_sha256, run_artifact_path, write_file
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
 from rey_lib.logs import get_logger, log_artifact_reference
 
 from rey_analyzer.requests import AnalysisRequest
 
-__all__ = ["build_artifact_store", "write_result"]
+__all__ = ["AnalyzerResultArtifacts", "build_artifact_store", "write_result"]
 
 _logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class AnalyzerResultArtifacts:
+    """Explicit artifacts produced by one governed Analyzer execution."""
+
+    result_path: Path
+    result_sha256: str
+    context_path: Path
+    context_sha256: str
+    candidate_path: Path | None
+    candidate_sha256: str | None
 
 
 def build_artifact_store(ctx: Any) -> LocalArtifactStore:
@@ -57,7 +70,11 @@ def write_result(
     source_cfg:     Any,
     analysis_cfg:   Any = None,
     ctx:            Any = None,
-) -> Path:
+    *,
+    workflow_name: str = "",
+    provider: str = "",
+    model: str = "",
+) -> AnalyzerResultArtifacts:
     """
     Write result artifacts directly under results_path.
 
@@ -77,8 +94,8 @@ def write_result(
 
     Returns
     -------
-    Path
-        Path to the result directory written for this run.
+    AnalyzerResultArtifacts
+        Exact result, context, and optional candidate artifacts.
     """
     results_root = Path(source_cfg.paths.results_path).expanduser().resolve()
     results_root.mkdir(parents=True, exist_ok=True)
@@ -112,26 +129,50 @@ def write_result(
     _state = {"state_ctx": ctx, "app": "rey_analyzer", "pipeline": getattr(ctx, "pipeline_name", None) if ctx else None, "reason": "analyzed"}
     write_file(result_file, record, file_type="JSON", **_state)
 
+    candidate_file: Path | None = None
+    if result.status == "success" and analysis_cfg is not None:
+        output_cfg = getattr(analysis_cfg, "output", None)
+        if output_cfg is not None and getattr(output_cfg, "write_raw", False):
+            candidate_file = _write_raw_output(
+                request,
+                result,
+                source_cfg,
+                ctx=ctx,
+            )
+
     context_file = run_artifact_path(
         results_root,
         artifact_name,
         run_timestamp,
         "context.json",
     )
-    write_file(context_file, {
+    context = {
         "request_id": request.request_id,
         "run_id": request.run_id,
+        "workflow_name": workflow_name,
         "source_name": request.source_name,
         "analysis_name": request.analysis_name,
-        "input_file": str(request.file_path),
-        "input_hash": request.input_hash,
+        "model_profile": request.llm_profile_name,
+        "provider": provider,
+        "model": model,
+        "source_artifact_path": str(request.file_path),
+        "source_artifact_sha256": request.input_hash,
         "contract_path": str(request.contract_path),
         "contract_hash": request.contract_hash,
         "schema_hash": request.schema_hash,
         "idempotency_mode": request.idempotency_mode,
+        "result_artifact_path": str(result_file),
+        "result_artifact_sha256": file_sha256(result_file),
+        "candidate_artifact_path": (
+            str(candidate_file) if candidate_file is not None else None
+        ),
+        "candidate_artifact_sha256": (
+            file_sha256(candidate_file) if candidate_file is not None else None
+        ),
         "status": result.status,
         "errors": result.errors,
-    }, file_type="JSON", **_state)
+    }
+    write_file(context_file, context, file_type="JSON", **_state)
 
     # The analysis result JSON is a run-created output; record it as an artifact on
     # the append-only run log (SGC_Rey_Log_Writer_Run_View_Groups) when a run context
@@ -159,12 +200,16 @@ def write_result(
         request.run_id, result.status, result_file, context_file,
     )
 
-    if result.status == "success" and analysis_cfg is not None:
-        output_cfg = getattr(analysis_cfg, "output", None)
-        if output_cfg is not None and getattr(output_cfg, "write_raw", False):
-            _write_raw_output(request, result, source_cfg, ctx=ctx)
-
-    return results_root
+    return AnalyzerResultArtifacts(
+        result_path=result_file,
+        result_sha256=file_sha256(result_file),
+        context_path=context_file,
+        context_sha256=file_sha256(context_file),
+        candidate_path=candidate_file,
+        candidate_sha256=(
+            file_sha256(candidate_file) if candidate_file is not None else None
+        ),
+    )
 
 
 def _artifact_step_name(request: AnalysisRequest) -> str:
@@ -195,12 +240,12 @@ def _write_raw_output(
     result:     AnalysisResult,
     source_cfg: Any,
     ctx:        Any = None,
-) -> None:
+) -> Path | None:
     """Write raw LLM output text to raw_output_path for pipeline chaining."""
     raw_dir_str = getattr(getattr(source_cfg, "paths", None), "raw_output_path", None)
     if not raw_dir_str:
         _logger.warning("write_raw is true but raw_output_path is not configured.")
-        return
+        return None
 
     raw_dir = Path(raw_dir_str).expanduser().resolve()
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -224,6 +269,7 @@ def _write_raw_output(
         )
 
     _logger.info("raw output written: %s", raw_file)
+    return raw_file
 
 
 def _raw_output_stem(file_path: Path) -> str:

@@ -30,7 +30,7 @@ from rey_lib.files.file_utils import (
     move_to_success,
     read_text_file,
 )
-from rey_lib.llm.analysis import Analyzer, AnalysisResult
+from rey_lib.llm.analysis import Analyzer
 from rey_lib.llm.package import LlmPackageContract, LlmPackageInput, build_package
 from rey_lib.errors.error_utils import build_safe_error_payload
 from rey_lib.logs import (
@@ -44,7 +44,6 @@ from rey_lib.logs import (
     previous_nest_level,
     set_nest_level,
 )
-from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.datasource import (
     CSVDataSource,
     DataSource,
@@ -53,7 +52,6 @@ from rey_lib.llm.datasource import (
 )
 
 from rey_analyzer.error_utils import (
-    AnalysisError,
     ConfigurationError,
     SourceError,
 )
@@ -62,7 +60,12 @@ from rey_analyzer.requests import AnalysisRequest, build_request
 from rey_analyzer.evidence import emit_llm_evidence
 from rey_analyzer.results import build_artifact_store, write_result
 
-__all__ = ["run_all", "run_source", "run_analysis", "build_payload"]
+__all__ = [
+    "build_payload",
+    "run_all",
+    "run_analysis",
+    "run_source",
+]
 
 _logger = get_logger(__name__)
 
@@ -130,6 +133,8 @@ def run_source(
     ctx:          Any,
     source_cfg:   Any,
     analysis_cfg: Any,
+    *,
+    workflow_name: str = "",
 ) -> tuple[int, int, int]:
     """
     Process all inbox files for one data source.
@@ -213,7 +218,13 @@ def run_source(
     for file_path in files:
         set_nest_level(ctx, "sibling")
         try:
-            status = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
+            status = run_analysis(
+                ctx,
+                source_cfg,
+                analysis_cfg,
+                file_path,
+                workflow_name=workflow_name,
+            )
         finally:
             previous_nest_level(ctx)
         if status == "success":
@@ -231,6 +242,8 @@ def run_analysis(
     source_cfg:   Any,
     analysis_cfg: Any,
     file_path:    Path,
+    *,
+    workflow_name: str = "",
 ) -> str:
     """
     Run the full analysis lifecycle for one file.
@@ -365,7 +378,16 @@ def run_analysis(
         # execution (SGC_Rey_Lib_Canonical_LLM_Package_And_Contract_Evidence).
         emit_llm_evidence(ctx, request, result, inputs=analysis_inputs)
 
-        write_result(request, result, source_cfg, analysis_cfg, ctx=ctx)
+        write_result(
+            request,
+            result,
+            source_cfg,
+            analysis_cfg,
+            ctx=ctx,
+            workflow_name=workflow_name,
+            provider=str(getattr(llm_profile, "provider", "") or ""),
+            model=str(getattr(llm_profile, "model", "") or ""),
+        )
         log_validation_result(
             ctx,
             validation_name="analysis_result",
@@ -445,12 +467,13 @@ def build_payload(
     from rey_lib.llm.preparation import prepare  # noqa: PLC0415
 
     # Resolve contract path the same way build_request does.
-    contracts_root_val = getattr(ctx, "contracts_root", None)
-    contracts_root = (
-        Path(str(contracts_root_val)).expanduser().resolve()
-        if contracts_root_val
-        else Path(__file__).parent.parent
-    )
+    contracts_root_value = getattr(ctx, "contracts_root", None)
+    if not contracts_root_value:
+        raise ConfigurationError(
+            "Rey Analyzer requires installation-owned 'contracts_root'; "
+            "application-relative contract fallback is prohibited."
+        )
+    contracts_root = Path(str(contracts_root_value)).expanduser().resolve()
     contract_rel = getattr(analysis_cfg, "contract", "")
     if not contract_rel:
         raise ConfigurationError(
