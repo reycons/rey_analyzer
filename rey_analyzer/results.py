@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rey_lib.files.file_utils import file_sha256, run_artifact_path, write_file
+from rey_lib.encryption import sha256_file
+from rey_lib.files.file_utils import run_artifact_path, write_file
 from rey_lib.llm.artifacts import LocalArtifactStore
 from rey_lib.llm.analysis import AnalysisResult
 from rey_lib.logs import get_logger, log_artifact_reference
@@ -162,12 +163,12 @@ def write_result(
         "schema_hash": request.schema_hash,
         "idempotency_mode": request.idempotency_mode,
         "result_artifact_path": str(result_file),
-        "result_artifact_sha256": file_sha256(result_file),
+        "result_artifact_sha256": sha256_file(result_file),
         "candidate_artifact_path": (
             str(candidate_file) if candidate_file is not None else None
         ),
         "candidate_artifact_sha256": (
-            file_sha256(candidate_file) if candidate_file is not None else None
+            sha256_file(candidate_file) if candidate_file is not None else None
         ),
         "status": result.status,
         "errors": result.errors,
@@ -202,12 +203,12 @@ def write_result(
 
     return AnalyzerResultArtifacts(
         result_path=result_file,
-        result_sha256=file_sha256(result_file),
+        result_sha256=sha256_file(result_file),
         context_path=context_file,
-        context_sha256=file_sha256(context_file),
+        context_sha256=sha256_file(context_file),
         candidate_path=candidate_file,
         candidate_sha256=(
-            file_sha256(candidate_file) if candidate_file is not None else None
+            sha256_file(candidate_file) if candidate_file is not None else None
         ),
     )
 

@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rey_lib.files.file_utils import bytes_sha256, file_sha256
+from rey_lib.encryption import sha256_bytes, sha256_file
 from rey_lib.llm.analysis import load_analysis_contract
 
 from rey_analyzer.error_utils import ConfigurationError, SourceError
@@ -122,7 +122,7 @@ def build_request(
         raise SourceError(f"Input file not found: {file_path}")
 
     try:
-        input_hash = file_sha256(file_path)
+        input_hash = sha256_file(file_path)
     except OSError as exc:
         raise SourceError(f"Cannot read input file: {file_path}") from exc
 
@@ -147,7 +147,7 @@ def build_request(
     if schema_file:
         schema_path = _resolve_path(schema_file, "schema", contracts_root)
         try:
-            schema_hash = file_sha256(schema_path)
+            schema_hash = sha256_file(schema_path)
         except OSError as exc:
             raise ConfigurationError(
                 f"Cannot read schema file: {schema_path}"
@@ -182,7 +182,7 @@ def _compute_request_id(
 ) -> str:
     """Return a 16-char deterministic ID from three content hashes."""
     combined = f"{input_hash}:{contract_hash}:{schema_hash}"
-    return bytes_sha256(combined.encode())[:16]
+    return sha256_bytes(combined.encode())[:16]
 
 
 def _resolve_llm_execution_profile(analysis_cfg: Any) -> str:
@@ -219,7 +219,7 @@ def _resolve_llm_execution_profile(analysis_cfg: Any) -> str:
 
 def _hash_bytes(data: bytes) -> str:
     """Return the shared SHA-256 hex digest for raw bytes."""
-    return bytes_sha256(data)
+    return sha256_bytes(data)
 
 
 def _contracts_root(ctx: Any) -> Path:
