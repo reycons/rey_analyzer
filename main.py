@@ -33,7 +33,6 @@ from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.logs import (
     get_logger,
-    log_artifact_manifest_from_run_log,
     set_nest_level,
     setup_logging,
 )
@@ -89,10 +88,7 @@ def main() -> int:
         # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
         # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
         if not getattr(args, "ctx_file", None):
-            try:
-                finalize_run_log(ctx.run_log_path)
-            finally:
-                log_artifact_manifest_from_run_log(ctx)
+            finalize_run_log(ctx.run_log_path)
 
 
 def _run_workflow_command(ctx: Any, args: argparse.Namespace) -> int:
