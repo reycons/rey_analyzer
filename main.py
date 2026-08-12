@@ -31,10 +31,10 @@ preparse_config_args()
 from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_from_args
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
+from rey_lib.config.bootstrap import build_ctx_for_app
 from rey_lib.logs import (
     get_logger,
     set_nest_level,
-    setup_logging,
 )
 from rey_lib.run_lifecycle import run_app_operation
 from rey_lib.logs import finalize_run_log
@@ -63,7 +63,7 @@ def main() -> int:
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
 
-    setup_logging(ctx, operation=args.command)
+    build_ctx_for_app(ctx=ctx, operation=args.command)
     log = get_logger(__name__)
     log.info("rey_analyzer starting — command=%s", args.command)
 
