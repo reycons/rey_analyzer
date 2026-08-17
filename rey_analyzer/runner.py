@@ -23,6 +23,7 @@ from typing import Any
 
 from rey_lib.artifacts import artifact_config_from_ctx
 from rey_lib.config.ctx import find_in_ctx
+from rey_lib.config.env_reference import resolve_env_reference
 from rey_lib.files.file_utils import (
     discover_inbox_files,
     move_to_failed,
@@ -580,7 +581,9 @@ def _build_analyzer(
         contract_path     = request.contract_path,
         provider          = llm_profile.provider,
         model             = llm_profile.model,
-        api_key           = getattr(llm_profile, "api_key", ""),
+        # Built for this one analysis, so the key is read here and lives only
+        # as long as the run does.
+        api_key           = resolve_env_reference(ctx, getattr(llm_profile, "api_key", "")),
         temperature       = float(getattr(llm_profile, "temperature", 0.0) or 0.0),
         provider_options  = _profile_provider_options(llm_profile),
         artifact_store    = artifact_store,
