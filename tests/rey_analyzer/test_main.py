@@ -1,5 +1,6 @@
 """Tests for rey_analyzer CLI exit behavior."""
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -38,7 +39,8 @@ def test_run_source_returns_nonzero_when_any_file_failed() -> None:
         patch.object(analyzer_main, "_resolve_source", return_value=source),
         patch.object(analyzer_main, "_resolve_analysis", return_value=SimpleNamespace()),
         patch.object(analyzer_main, "run_source", return_value=(4, 1, 0)),
-        patch.object(analyzer_main, "build_ctx_for_app"),
+        patch.object(analyzer_main, "app_runtime",
+                 new=lambda **kw: nullcontext(kw["ctx"])),
         patch.object(analyzer_main, "finalize_run_log"),
     ):
         assert analyzer_main.main() == 1
@@ -59,7 +61,8 @@ def test_submit_file_returns_nonzero_when_analysis_failed() -> None:
         patch.object(analyzer_main, "_resolve_source", return_value=source),
         patch.object(analyzer_main, "_resolve_analysis", return_value=SimpleNamespace()),
         patch.object(analyzer_main, "run_analysis", return_value="failed"),
-        patch.object(analyzer_main, "build_ctx_for_app"),
+        patch.object(analyzer_main, "app_runtime",
+                 new=lambda **kw: nullcontext(kw["ctx"])),
         patch.object(analyzer_main, "finalize_run_log"),
     ):
         assert analyzer_main.main() == 1

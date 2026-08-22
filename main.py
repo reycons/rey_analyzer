@@ -31,7 +31,7 @@ preparse_config_args()
 from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_from_args
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.errors.error_utils import AppError, handle_exception
-from rey_lib.config.bootstrap import build_ctx_for_app
+from rey_lib.config.bootstrap import app_runtime
 from rey_lib.logs import (
     get_logger,
     set_nest_level,
@@ -63,32 +63,36 @@ def main() -> int:
     object.__setattr__(ctx, "batch_start_dt", datetime.now())
     object.__setattr__(ctx, "cli_call", " ".join(sys.argv))
 
-    build_ctx_for_app(ctx=ctx, operation=args.command)
-    log = get_logger(__name__)
-    log.info("rey_analyzer starting — command=%s", args.command)
+    # app_runtime is the process boundary: it composes the context and,
+    # when this block exits, collects the shared runtime objects it
+    # created. It encloses everything below, so any existing finalization
+    # runs while those objects are still live and collection happens after.
+    with app_runtime(ctx=ctx, operation=args.command) as ctx:
+        log = get_logger(__name__)
+        log.info("rey_analyzer starting — command=%s", args.command)
 
-    try:
-        return run_app_operation(
-            ctx,
-            str(args.command),
-            lambda: _execute_command(ctx, args, log),
-        )
+        try:
+            return run_app_operation(
+                ctx,
+                str(args.command),
+                lambda: _execute_command(ctx, args, log),
+            )
 
-    except (AnalyzerError, AppError) as exc:
-        handle_exception(log, exc, "rey_analyzer error")
-        return 1
+        except (AnalyzerError, AppError) as exc:
+            handle_exception(log, exc, "rey_analyzer error")
+            return 1
 
-    except Exception as exc:  # noqa: BLE001  — top-level safety net only
-        handle_exception(log, exc, "Unexpected error in rey_analyzer")
-        return 2
+        except Exception as exc:  # noqa: BLE001  — top-level safety net only
+            handle_exception(log, exc, "Unexpected error in rey_analyzer")
+            return 2
 
-    finally:
-        # Top-level owner (standalone run, not a pipeline step) explicitly creates the
-        # RESULTS_SUMMARY after its final RUN_COMPLETE — on success or failure. Pipeline
-        # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
-        # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
-        if not getattr(args, "ctx_file", None):
-            finalize_run_log(ctx.run_log_path)
+        finally:
+            # Top-level owner (standalone run, not a pipeline step) explicitly creates the
+            # RESULTS_SUMMARY after its final RUN_COMPLETE — on success or failure. Pipeline
+            # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
+            # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
+            if not getattr(args, "ctx_file", None):
+                finalize_run_log(ctx.run_log_path)
 
 
 def _run_workflow_command(ctx: Any, args: argparse.Namespace) -> int:
