@@ -54,7 +54,7 @@ def build_process_registry() -> dict[str, Any]:
     One process, ``analysis``, wraps the existing ``run_source`` unchanged. Steps
     may only call this registered process name, never arbitrary Python from YAML.
     """
-    def analysis(ctx: Any, config: dict[str, Any], run: RunContext) -> StepResult:
+    def analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext) -> StepResult:
         return _process_analysis(ctx, config, run)
 
     return {"analysis": analysis}
@@ -64,7 +64,7 @@ def build_process_registry() -> dict[str, Any]:
 # Process handler (coordinator signature: ctx, config, run) -> StepResult
 # ---------------------------------------------------------------------------
 
-def _process_analysis(ctx: Any, config: dict[str, Any], run: RunContext) -> StepResult:
+def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext) -> StepResult:
     """Run one named analyzer source. Calls the existing run_source unchanged.
 
     ``source`` is the step-config data-source name; the source's own config names
@@ -77,8 +77,7 @@ def _process_analysis(ctx: Any, config: dict[str, Any], run: RunContext) -> Step
 
     source_cfg = _resolve_source(ctx, source_name)
     analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-    success, failed, pending = run_source(
-        ctx,
+    success, failed, pending = run_source(ctx, run_log,
         source_cfg,
         analysis_cfg,
         workflow_name=str(run.metadata.get("workflow") or ""),

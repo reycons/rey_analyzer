@@ -67,15 +67,15 @@ def main() -> int:
     # when this block exits, collects the shared runtime objects it
     # created. It encloses everything below, so any existing finalization
     # runs while those objects are still live and collection happens after.
-    with app_runtime(ctx=ctx, operation=args.command) as ctx:
+    with app_runtime(ctx=ctx, operation=args.command) as (ctx, run_log):
         log = get_logger(__name__)
         log.info("rey_analyzer starting — command=%s", args.command)
 
         try:
             return run_app_operation(
                 ctx,
-                str(args.command),
-                lambda: _execute_command(ctx, args, log),
+                run_log, str(args.command),
+                lambda: _execute_command(ctx, run_log, args, log),
             )
 
         except (AnalyzerError, AppError) as exc:
@@ -92,7 +92,7 @@ def main() -> int:
             # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
             # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
             if not getattr(args, "ctx_file", None):
-                finalize_run_log(ctx.run_log_path)
+                finalize_run_log(run_log)
 
 
 def _run_workflow_command(ctx: Any, args: argparse.Namespace) -> int:
@@ -108,10 +108,10 @@ def _run_workflow_command(ctx: Any, args: argparse.Namespace) -> int:
     )
 
 
-def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
+def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> int:
     """Execute the selected analyzer command body."""
     if args.command == "run":
-        success, failed, pending = run_all(ctx)
+        success, failed, pending = run_all(ctx, run_log)
         log.info(
             "run complete: success=%d failed=%d pending=%d",
             success, failed, pending,
@@ -123,7 +123,7 @@ def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
     elif args.command == "run-source":
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-        success, failed, pending = run_source(ctx, source_cfg, analysis_cfg)
+        success, failed, pending = run_source(ctx, run_log, source_cfg, analysis_cfg)
         log.info(
             "run-source complete: success=%d failed=%d pending=%d",
             success, failed, pending,
@@ -141,9 +141,9 @@ def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
         file_path    = Path(args.file).expanduser().resolve()
-        set_nest_level(ctx, "next")
-        set_nest_level(ctx, "sibling")
-        status       = run_analysis(ctx, source_cfg, analysis_cfg, file_path)
+        set_nest_level(run_log, "next")
+        set_nest_level(run_log, "sibling")
+        status       = run_analysis(ctx, run_log, source_cfg, analysis_cfg, file_path)
         log.info("submit-file complete: status=%s", status)
         if status == "failed":
             return 1
@@ -153,10 +153,9 @@ def _execute_command(ctx: Any, args: argparse.Namespace, log: Any) -> int:
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
         file_path    = Path(args.file).expanduser().resolve()
-        set_nest_level(ctx, "next")
-        set_nest_level(ctx, "sibling")
-        status       = run_analysis(
-            ctx, source_cfg, analysis_cfg, file_path,
+        set_nest_level(run_log, "next")
+        set_nest_level(run_log, "sibling")
+        status       = run_analysis(ctx, run_log, source_cfg, analysis_cfg, file_path,
         )
         log.info("analyze-file complete: status=%s", status)
         if status == "failed":

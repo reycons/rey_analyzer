@@ -71,6 +71,7 @@ def write_result(
     source_cfg:     Any,
     analysis_cfg:   Any = None,
     ctx:            Any = None,
+    run_log:        Any = None,
     *,
     workflow_name: str = "",
     provider: str = "",
@@ -139,6 +140,7 @@ def write_result(
                 result,
                 source_cfg,
                 ctx=ctx,
+                run_log=run_log,
             )
 
     context_file = run_artifact_path(
@@ -179,16 +181,14 @@ def write_result(
     # the append-only run log (SGC_Rey_Log_Writer_Run_View_Groups) when a run context
     # is present. Emission is fail-safe and never blocks result writing.
     if ctx is not None:
-        log_artifact_reference(
-            ctx, str(result_file), role="analysis_result", event="written",
+        log_artifact_reference(run_log, str(result_file), role="analysis_result", event="written",
             artifact_group="analysis_results", producing_app="rey_analyzer",
             producing_step=_artifact_step_name(request),
             producer="analyzer", artifact_type="analysis_result",
             source_path=str(getattr(request, "file_path", "") or ""),
             viewer_type="file", safe_to_preview=True,
         )
-        log_artifact_reference(
-            ctx, str(context_file), role="analysis_context", event="written",
+        log_artifact_reference(run_log, str(context_file), role="analysis_context", event="written",
             artifact_group="analysis_context", producing_app="rey_analyzer",
             producing_step=_artifact_step_name(request),
             producer="analyzer", artifact_type="analysis_context",
@@ -241,6 +241,7 @@ def _write_raw_output(
     result:     AnalysisResult,
     source_cfg: Any,
     ctx:        Any = None,
+    run_log:        Any = None,
 ) -> Path | None:
     """Write raw LLM output text to raw_output_path for pipeline chaining."""
     raw_dir_str = getattr(getattr(source_cfg, "paths", None), "raw_output_path", None)
@@ -260,8 +261,7 @@ def _write_raw_output(
 
     # Raw LLM output is a run-created artifact used for pipeline chaining.
     if ctx is not None:
-        log_artifact_reference(
-            ctx, str(raw_file), role="raw_output", event="written",
+        log_artifact_reference(run_log, str(raw_file), role="raw_output", event="written",
             artifact_group="analysis_results", producing_app="rey_analyzer",
             producing_step=_artifact_step_name(request),
             producer="llm", artifact_type="llm_result",

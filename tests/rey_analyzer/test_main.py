@@ -2,6 +2,14 @@
 
 from contextlib import nullcontext
 from types import SimpleNamespace
+
+
+def _stub_run_log():
+    """The run log the real process boundary would have opened."""
+    from rey_lib.logs.run_log import RunLog
+
+    return RunLog(app="rey_analyzer", run_id="test-run",
+                  run_timestamp="20260822_000000")
 from unittest.mock import patch
 
 import main as analyzer_main
@@ -40,7 +48,7 @@ def test_run_source_returns_nonzero_when_any_file_failed() -> None:
         patch.object(analyzer_main, "_resolve_analysis", return_value=SimpleNamespace()),
         patch.object(analyzer_main, "run_source", return_value=(4, 1, 0)),
         patch.object(analyzer_main, "app_runtime",
-                 new=lambda **kw: nullcontext(kw["ctx"])),
+                 new=lambda **kw: nullcontext((kw["ctx"], _stub_run_log()))),
         patch.object(analyzer_main, "finalize_run_log"),
     ):
         assert analyzer_main.main() == 1
@@ -62,7 +70,7 @@ def test_submit_file_returns_nonzero_when_analysis_failed() -> None:
         patch.object(analyzer_main, "_resolve_analysis", return_value=SimpleNamespace()),
         patch.object(analyzer_main, "run_analysis", return_value="failed"),
         patch.object(analyzer_main, "app_runtime",
-                 new=lambda **kw: nullcontext(kw["ctx"])),
+                 new=lambda **kw: nullcontext((kw["ctx"], _stub_run_log()))),
         patch.object(analyzer_main, "finalize_run_log"),
     ):
         assert analyzer_main.main() == 1

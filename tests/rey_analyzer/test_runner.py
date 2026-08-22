@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tests.conftest import make_run_log
+
 from rey_analyzer.error_utils import SourceError
 from rey_analyzer.runner import _build_data_source, _max_files
 
@@ -66,7 +68,7 @@ def test_max_files_defaults_to_runtime(sample_ctx: SimpleNamespace) -> None:
     assert _max_files(sample_ctx, source_cfg) == 25
 
 
-def test_run_source_empty_inbox(
+def test_run_source_empty_inbox(run_log, 
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
@@ -75,12 +77,12 @@ def test_run_source_empty_inbox(
     from rey_analyzer.runner import run_source
 
     success, failed, pending = run_source(
-        sample_ctx, sample_source_cfg, sample_analysis_cfg
+        sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg
     )
     assert (success, failed, pending) == (0, 0, 0)
 
 
-def test_run_source_logs_input_discovery_count(
+def test_run_source_logs_input_discovery_count(run_log, 
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
@@ -91,6 +93,8 @@ def test_run_source_logs_input_discovery_count(
     from rey_analyzer.runner import run_source
 
     object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
+    run_log = make_run_log(tmp_path, app="rey_analyzer",
+                           path=str(tmp_path / "run.jsonl"))
     object.__setattr__(sample_ctx, "run_id", "r1")
     object.__setattr__(sample_ctx, "run_timestamp", "20260709_000000")
     inbox = Path(sample_source_cfg.paths.inbox_path)
@@ -100,7 +104,7 @@ def test_run_source_logs_input_discovery_count(
 
     with patch("rey_analyzer.runner.run_analysis", return_value="success"):
         success, failed, pending = run_source(
-            sample_ctx, sample_source_cfg, sample_analysis_cfg
+            sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg
         )
 
     assert (success, failed, pending) == (1, 0, 0)
@@ -117,7 +121,7 @@ def test_run_source_logs_input_discovery_count(
     assert discovered["source_config"] == sample_source_cfg.name
 
 
-def test_two_file_analyses_create_sibling_input_branches(
+def test_two_file_analyses_create_sibling_input_branches(run_log, 
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
@@ -129,6 +133,8 @@ def test_two_file_analyses_create_sibling_input_branches(
     from rey_lib.logs import set_nest_level
 
     object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
+    run_log = make_run_log(tmp_path, app="rey_analyzer",
+                           path=str(tmp_path / "run.jsonl"))
     object.__setattr__(sample_ctx, "run_id", "r1")
     object.__setattr__(sample_ctx, "run_timestamp", "20260709_000000")
 
@@ -140,11 +146,11 @@ def test_two_file_analyses_create_sibling_input_branches(
         )
 
     # The app boundary (run_app_operation) establishes app level before run_source.
-    set_nest_level(sample_ctx, "app")
+    set_nest_level(run_log, "app")
     sample_source_cfg.move_files = False
 
     with patch("rey_analyzer.runner.build_request", side_effect=RuntimeError("stop")):
-        assert run_source(sample_ctx, sample_source_cfg, sample_analysis_cfg) == (0, 2, 0)
+        assert run_source(sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg) == (0, 2, 0)
 
     records = [
         json.loads(line)
@@ -167,7 +173,7 @@ def test_two_file_analyses_create_sibling_input_branches(
     assert [r["record_id"] for r in records] == list(range(1, len(records) + 1))
 
 
-def test_run_all_returns_failed_count_on_source_exception(
+def test_run_all_returns_failed_count_on_source_exception(run_log, 
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
 ) -> None:
@@ -177,12 +183,12 @@ def test_run_all_returns_failed_count_on_source_exception(
     sample_source_cfg.analysis_config = "missing_config"
     sample_ctx.data_sources = [sample_source_cfg]
 
-    success, failed, pending = run_all(sample_ctx)
+    success, failed, pending = run_all(sample_ctx, run_log)
 
     assert (success, failed, pending) == (0, 1, 0)
 
 
-def test_run_analysis_moves_to_failed_on_exception(
+def test_run_analysis_moves_to_failed_on_exception(run_log, 
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
@@ -197,12 +203,14 @@ def test_run_analysis_moves_to_failed_on_exception(
     file_in_inbox = inbox / sample_jsonl_file.name
     file_in_inbox.write_text(sample_jsonl_file.read_text())
     object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
+    run_log = make_run_log(tmp_path, app="rey_analyzer",
+                           path=str(tmp_path / "run.jsonl"))
     object.__setattr__(sample_ctx, "run_id", "r1")
     object.__setattr__(sample_ctx, "run_timestamp", "20260709_000000")
 
     with patch("rey_analyzer.runner.build_request", side_effect=Exception("boom")):
         status = run_analysis(
-            sample_ctx, sample_source_cfg, sample_analysis_cfg, file_in_inbox
+            sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg, file_in_inbox
         )
 
     assert status == "failed"
@@ -219,7 +227,7 @@ def test_run_analysis_moves_to_failed_on_exception(
     assert validation["status"] == "failed"
 
 
-def test_run_analysis_supplies_resolved_file_set_as_second_input(
+def test_run_analysis_supplies_resolved_file_set_as_second_input(run_log, 
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -290,7 +298,7 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(
         lambda *_a, **kwargs: captured.update(evidence_inputs=kwargs["inputs"]),
     )
 
-    assert runner.run_analysis(ctx, source_cfg, analysis_cfg, profile) == "success"
+    assert runner.run_analysis(ctx, run_log, source_cfg, analysis_cfg, profile) == "success"
 
     provider_package = json.loads(str(captured["provider_input"]))
     assert [item["name"] for item in provider_package["inputs"]] == [

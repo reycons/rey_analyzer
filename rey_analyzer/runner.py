@@ -80,7 +80,7 @@ _TEXT_INPUT_TYPES = frozenset({
 })
 
 
-def run_all(ctx: Any) -> tuple[int, int, int]:
+def run_all(ctx: Any, run_log) -> tuple[int, int, int]:
     """
     Process all enabled data sources defined in ctx.
 
@@ -113,7 +113,7 @@ def run_all(ctx: Any) -> tuple[int, int, int]:
 
         try:
             analysis_cfg = _resolve_analysis_cfg(ctx, source_cfg.analysis_config)
-            success, failed, pending = run_source(ctx, source_cfg, analysis_cfg)
+            success, failed, pending = run_source(ctx, run_log, source_cfg, analysis_cfg)
             _logger.info(
                 "source '%s' complete: success=%d failed=%d pending=%d",
                 source_cfg.name, success, failed, pending,
@@ -131,7 +131,7 @@ def run_all(ctx: Any) -> tuple[int, int, int]:
 
 
 def run_source(
-    ctx:          Any,
+    ctx:          Any, run_log,
     source_cfg:   Any,
     analysis_cfg: Any,
     *,
@@ -161,8 +161,7 @@ def run_source(
     files     = discover_inbox_files(source_cfg)[:max_files]
     pattern = str(getattr(source_cfg, "file_pattern", "*") or "*")
     inbox = str(getattr(getattr(source_cfg, "paths", None), "inbox_path", "") or "")
-    log_row_count(
-        ctx,
+    log_row_count(run_log,
         count_name="analysis_input_files_discovered",
         count=len(files),
         subject=source_cfg.name,
@@ -171,8 +170,7 @@ def run_source(
         source_path=inbox,
     )
     for discovered in files:
-        log_input_discovered(
-            ctx,
+        log_input_discovered(run_log,
             input_name=source_cfg.name,
             path=str(discovered),
             pattern=pattern,
@@ -184,8 +182,7 @@ def run_source(
 
     if not files:
         if bool(getattr(source_cfg, "require_input", False)):
-            log_validation_result(
-                ctx,
+            log_validation_result(run_log,
                 validation_name="analysis_input_required",
                 status="failed",
                 message=f"source '{source_cfg.name}' has no required input files",
@@ -200,8 +197,7 @@ def run_source(
                 "ran successfully and that the inbox path and redact.yaml are correct."
             )
         _logger.info("source '%s': inbox is empty.", source_cfg.name)
-        log_validation_result(
-            ctx,
+        log_validation_result(run_log,
             validation_name="analysis_input_required",
             status="success",
             message=f"source '{source_cfg.name}' has no required input files",
@@ -215,19 +211,18 @@ def run_source(
 
     success = failed = pending = 0
 
-    set_nest_level(ctx, "next")
+    set_nest_level(run_log, "next")
     for file_path in files:
-        set_nest_level(ctx, "sibling")
+        set_nest_level(run_log, "sibling")
         try:
-            status = run_analysis(
-                ctx,
+            status = run_analysis(ctx, run_log,
                 source_cfg,
                 analysis_cfg,
                 file_path,
                 workflow_name=workflow_name,
             )
         finally:
-            previous_nest_level(ctx)
+            previous_nest_level(run_log)
         if status == "success":
             success += 1
         elif status == "pending_approval":
@@ -239,7 +234,7 @@ def run_source(
 
 
 def run_analysis(
-    ctx:          Any,
+    ctx:          Any, run_log,
     source_cfg:   Any,
     analysis_cfg: Any,
     file_path:    Path,
@@ -278,8 +273,7 @@ def run_analysis(
     object.__setattr__(ctx, "source_name", source_cfg.name)
     object.__setattr__(ctx, "analysis_name", analysis_cfg.name)
     object.__setattr__(ctx, "current_file", file_path.name)
-    log_input_file_reference(
-        ctx,
+    log_input_file_reference(run_log,
         str(file_path),
         file_role="analysis_input",
         display_name=file_path.name,
@@ -287,7 +281,7 @@ def run_analysis(
         analysis_name=analysis_cfg.name,
         input_type=getattr(source_cfg, "input_type", ""),
     )
-    next_nest_level(ctx)
+    next_nest_level(run_log)
 
     move_files = getattr(source_cfg, "move_files", True)
 
@@ -302,8 +296,7 @@ def run_analysis(
         processing = move_to_processing(file_path, source_cfg, **_move_kwargs) if move_files else file_path
 
         llm_profile = _resolve_llm_profile(ctx, request.llm_profile_name)
-        log_validation_result(
-            ctx,
+        log_validation_result(run_log,
             validation_name="analyzer_execution_contract",
             status="passed",
             message=(
@@ -377,7 +370,7 @@ def run_analysis(
         # Emit per-analysis LLM evidence (LLM_CONTRACT + LLM_CONTEXT) from the
         # values just used, before final run-log completion. Evidence never masks
         # execution (SGC_Rey_Lib_Canonical_LLM_Package_And_Contract_Evidence).
-        emit_llm_evidence(ctx, request, result, inputs=analysis_inputs)
+        emit_llm_evidence(ctx, run_log, request, result, inputs=analysis_inputs)
 
         write_result(
             request,
@@ -385,12 +378,12 @@ def run_analysis(
             source_cfg,
             analysis_cfg,
             ctx=ctx,
+            run_log=run_log,
             workflow_name=workflow_name,
             provider=str(getattr(llm_profile, "provider", "") or ""),
             model=str(getattr(llm_profile, "model", "") or ""),
         )
-        log_validation_result(
-            ctx,
+        log_validation_result(run_log,
             validation_name="analysis_result",
             status=result.status,
             message=f"analysis={analysis_cfg.name} file={file_path.name} status={result.status}",
@@ -420,15 +413,14 @@ def run_analysis(
         # Record the actual caught exception as a structured ERROR on the shared run
         # log through the common error path (as every Rey app does), so the real
         # failure survives beyond the Python log line and the failed result.
-        log_error(ctx, **build_safe_error_payload(
+        log_error(run_log, **build_safe_error_payload(
             exc, message=f"analysis failed for '{file_path.name}'"))
         if move_files:
             try:
                 move_to_failed(processing, source_cfg, state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None))
             except Exception:  # noqa: BLE001
                 _logger.error("could not move '%s' to failed.", file_path.name)
-        log_validation_result(
-            ctx,
+        log_validation_result(run_log,
             validation_name="analysis_result",
             status="failed",
             message=f"analysis={analysis_cfg.name} file={file_path.name} failed",

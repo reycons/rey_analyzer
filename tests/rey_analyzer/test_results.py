@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from tests.conftest import make_run_log
+
 from rey_analyzer.results import _artifact_step_name, _raw_output_stem, write_result
 
 
@@ -19,7 +21,7 @@ def _request(run_id: str, file_path: Path) -> SimpleNamespace:
     )
 
 
-def test_write_result_writes_flat_per_request_result_and_context_artifacts(
+def test_write_result_writes_flat_per_request_result_and_context_artifacts(run_log, 
     tmp_path: Path,
 ) -> None:
     """Result/context artifacts are flat and uniquely identify the request."""
@@ -33,6 +35,8 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
         run_id="run-pipe-1",
         run_timestamp="20260706_120000",
     )
+    run_log = make_run_log(tmp_path, app="rey_analyzer", run_id="run-pipe-1",
+                           run_timestamp="20260706_120000")
 
     artifacts = write_result(
         request,
@@ -40,6 +44,7 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
         source_cfg,
         analysis_cfg=None,
         ctx=ctx,
+        run_log=run_log,
         workflow_name="governed_workflow",
         provider="local",
         model="test-model",
@@ -71,7 +76,7 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
 
     records = [
         json.loads(line)
-        for line in Path(ctx.run_log_path).read_text(encoding="utf-8").splitlines()
+        for line in Path(run_log.path()).read_text(encoding="utf-8").splitlines()
     ]
     result_artifact = next(
         r for r in records
@@ -99,7 +104,7 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(
     assert context_artifact["safe_to_preview"] is True
 
 
-def test_write_result_preserves_independent_artifacts_for_multiple_inputs(
+def test_write_result_preserves_independent_artifacts_for_multiple_inputs(run_log, 
     tmp_path: Path,
 ) -> None:
     """Two inputs in one workflow run cannot overwrite each other's evidence."""
@@ -118,12 +123,14 @@ def test_write_result_preserves_independent_artifacts_for_multiple_inputs(
         run_id="run-pipe-1",
         run_timestamp="20260706_120000",
     )
+    run_log = make_run_log(tmp_path, app="rey_analyzer", run_id="run-pipe-1",
+                           run_timestamp="20260706_120000")
     first = _request("run-analysis-1", tmp_path / "first.json")
     second = _request("run-analysis-2", tmp_path / "second.json")
     second.request_id = "req-2"
 
-    first_artifacts = write_result(first, result, source_cfg, ctx=ctx)
-    write_result(second, result, source_cfg, ctx=ctx)
+    first_artifacts = write_result(first, result, source_cfg, ctx=ctx, run_log=run_log)
+    write_result(second, result, source_cfg, ctx=ctx, run_log=run_log)
     results_root = first_artifacts.result_path.parent
 
     assert sorted(path.name for path in Path(results_root).glob("*.context.json")) == [
@@ -136,7 +143,7 @@ def test_write_result_preserves_independent_artifacts_for_multiple_inputs(
     ]
 
 
-def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
+def test_raw_output_logged_as_llm_artifact(run_log, tmp_path: Path) -> None:
     """Raw LLM output is recorded as an llm_result artifact under the llm producer."""
     from rey_lib.logs import group_artifacts_by_producer, normalize_artifacts
 
@@ -151,6 +158,8 @@ def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
         log_file=str(tmp_path / "rey_analyzer.jsonl"), owner_app_name="rey_analyzer",
         run_id="run-pipe-2", run_timestamp="20260708_000000",
     )
+    run_log = make_run_log(tmp_path, app="rey_analyzer", run_id="run-pipe-2",
+                           run_timestamp="20260708_000000")
 
     artifacts = write_result(
         request,
@@ -158,6 +167,7 @@ def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
         source_cfg,
         analysis_cfg=analysis_cfg,
         ctx=ctx,
+        run_log=run_log,
     )
 
     raw_files = list((tmp_path / "raw").rglob("*.yaml"))
@@ -168,7 +178,7 @@ def test_raw_output_logged_as_llm_artifact(tmp_path: Path) -> None:
     assert context["candidate_artifact_sha256"] == artifacts.candidate_sha256
 
     records = [json.loads(line)
-               for line in Path(ctx.run_log_path).read_text(encoding="utf-8").splitlines()]
+               for line in Path(run_log.path()).read_text(encoding="utf-8").splitlines()]
     raw = next(r for r in records
                if r["record_type"] == "ARTIFACT_REFERENCE" and r.get("artifact_role") == "raw_output")
     assert raw["producer"] == "llm"

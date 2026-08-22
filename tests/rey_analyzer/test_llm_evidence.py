@@ -96,7 +96,7 @@ def test_context_preserves_supplied_profile_and_file_set_inputs(tmp_path: Path) 
 
 
 # TEST-005 / TEST-006A / AC-008 / AC-009C
-def test_emits_contract_and_context_with_correlation_identifiers(tmp_path, monkeypatch) -> None:
+def test_emits_contract_and_context_with_correlation_identifiers(run_log, tmp_path, monkeypatch) -> None:
     """Both records are emitted, carrying identifiers that reach the ExecutionRecord."""
     emitted: list[tuple] = []
     monkeypatch.setattr(
@@ -104,7 +104,7 @@ def test_emits_contract_and_context_with_correlation_identifiers(tmp_path, monke
         lambda ctx, record_type, **fields: emitted.append((record_type, fields)),
     )
     request, result = _request(tmp_path), _result()
-    emit_llm_evidence(_ctx(), request, result)
+    emit_llm_evidence(_ctx(), run_log, request, result)
 
     by_type = {record_type: fields for record_type, fields in emitted}
     assert set(by_type) == {"LLM_CONTRACT", "LLM_CONTEXT"}
@@ -128,14 +128,14 @@ def test_emits_contract_and_context_with_correlation_identifiers(tmp_path, monke
     }
 
 
-def test_evidence_emission_never_masks_the_analysis(tmp_path, monkeypatch) -> None:
+def test_evidence_emission_never_masks_the_analysis(run_log, tmp_path, monkeypatch) -> None:
     """A failure while emitting evidence is swallowed, not raised."""
     def boom(*_a, **_k):
         raise RuntimeError("record writer down")
 
     monkeypatch.setattr(evidence, "log_run_record", boom)
     # Must not raise.
-    assert emit_llm_evidence(_ctx(), _request(tmp_path), _result()) == {}
+    assert emit_llm_evidence(_ctx(), run_log, _request(tmp_path), _result()) == {}
 
 
 # TEST-006B / AC-009B

@@ -142,7 +142,7 @@ def _correlation_fields(request: Any) -> dict[str, Any]:
 
 
 def emit_llm_evidence(
-    ctx: Any,
+    ctx: Any, run_log,
     request: Any,
     result: Any,
     *,
@@ -164,8 +164,7 @@ def emit_llm_evidence(
         correlation = _correlation_fields(request)
 
         # LLM_CONTRACT: the exact resolved contract used for this analysis.
-        log_run_record(
-            ctx,
+        log_run_record(run_log,
             "LLM_CONTRACT",
             record_group="results",
             contract_path=package["contract"]["path"],
@@ -173,8 +172,7 @@ def emit_llm_evidence(
         )
 
         # LLM_CONTEXT: the effective invocation context, as the canonical package.
-        log_run_record(
-            ctx,
+        log_run_record(run_log,
             "LLM_CONTEXT",
             record_group="results",
             package=package,
