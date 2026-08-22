@@ -41,9 +41,6 @@ from rey_lib.logs import (
     log_input_file_reference,
     log_row_count,
     log_validation_result,
-    next_nest_level,
-    previous_nest_level,
-    set_nest_level,
 )
 from rey_lib.llm.datasource import (
     CSVDataSource,
@@ -211,9 +208,9 @@ def run_source(
 
     success = failed = pending = 0
 
-    set_nest_level(run_log, "next")
+    run_log.set_nest_level("next")
     for file_path in files:
-        set_nest_level(run_log, "sibling")
+        run_log.set_nest_level("sibling")
         try:
             status = run_analysis(ctx, run_log,
                 source_cfg,
@@ -222,7 +219,7 @@ def run_source(
                 workflow_name=workflow_name,
             )
         finally:
-            previous_nest_level(run_log)
+            run_log.exit()
         if status == "success":
             success += 1
         elif status == "pending_approval":
@@ -281,7 +278,7 @@ def run_analysis(
         analysis_name=analysis_cfg.name,
         input_type=getattr(source_cfg, "input_type", ""),
     )
-    next_nest_level(run_log)
+    run_log.enter()
 
     move_files = getattr(source_cfg, "move_files", True)
 

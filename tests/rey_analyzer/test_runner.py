@@ -130,7 +130,6 @@ def test_two_file_analyses_create_sibling_input_branches(run_log,
 ) -> None:
     """Each input is a sibling anchor and owns its file-processing records."""
     from rey_analyzer.runner import run_source
-    from rey_lib.logs import set_nest_level
 
     object.__setattr__(sample_ctx, "run_log_path", str(tmp_path / "run.jsonl"))
     run_log = make_run_log(tmp_path, app="rey_analyzer",
@@ -146,7 +145,7 @@ def test_two_file_analyses_create_sibling_input_branches(run_log,
         )
 
     # The app boundary (run_app_operation) establishes app level before run_source.
-    set_nest_level(run_log, "app")
+    run_log.set_nest_level("app")
     sample_source_cfg.move_files = False
 
     with patch("rey_analyzer.runner.build_request", side_effect=RuntimeError("stop")):
@@ -286,7 +285,6 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(run_log,
     monkeypatch.setattr(runner, "_build_analyzer", lambda *_a: FakeAnalyzer())
     monkeypatch.setattr(runner, "write_result", lambda *_a, **_k: None)
     monkeypatch.setattr(runner, "log_input_file_reference", lambda *_a, **_k: None)
-    monkeypatch.setattr(runner, "next_nest_level", lambda *_a, **_k: None)
     monkeypatch.setattr(
         runner,
         "log_validation_result",

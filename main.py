@@ -34,7 +34,6 @@ from rey_lib.errors.error_utils import AppError, handle_exception
 from rey_lib.config.bootstrap import app_runtime
 from rey_lib.logs import (
     get_logger,
-    set_nest_level,
 )
 from rey_lib.run_lifecycle import run_app_operation
 from rey_lib.logs import finalize_run_log
@@ -141,8 +140,8 @@ def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> i
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
         file_path    = Path(args.file).expanduser().resolve()
-        set_nest_level(run_log, "next")
-        set_nest_level(run_log, "sibling")
+        run_log.set_nest_level("next")
+        run_log.set_nest_level("sibling")
         status       = run_analysis(ctx, run_log, source_cfg, analysis_cfg, file_path)
         log.info("submit-file complete: status=%s", status)
         if status == "failed":
@@ -153,8 +152,8 @@ def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> i
         source_cfg   = _resolve_source(ctx, args.source)
         analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
         file_path    = Path(args.file).expanduser().resolve()
-        set_nest_level(run_log, "next")
-        set_nest_level(run_log, "sibling")
+        run_log.set_nest_level("next")
+        run_log.set_nest_level("sibling")
         status       = run_analysis(ctx, run_log, source_cfg, analysis_cfg, file_path,
         )
         log.info("analyze-file complete: status=%s", status)
