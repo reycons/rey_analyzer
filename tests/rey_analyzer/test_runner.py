@@ -17,7 +17,7 @@ from rey_analyzer.runner import _build_data_source, _max_files
 
 def test_build_data_source_jsonl_returns_text_source(tmp_path: Path) -> None:
     """jsonl_file input_type returns a TextDataSource."""
-    from rey_lib.llm.datasource import TextDataSource
+    from rey_lib.analysis import TextDataSource
 
     f = tmp_path / "test.jsonl"
     f.write_text('{"level":"ERROR"}\n', encoding="utf-8")
@@ -27,7 +27,7 @@ def test_build_data_source_jsonl_returns_text_source(tmp_path: Path) -> None:
 
 def test_build_data_source_csv_returns_csv_source(tmp_path: Path) -> None:
     """csv_file input_type returns a CSVDataSource."""
-    from rey_lib.llm.datasource import CSVDataSource
+    from rey_lib.analysis import CSVDataSource
 
     f = tmp_path / "test.csv"
     f.write_text("col1,col2\na,b\n", encoding="utf-8")
@@ -45,7 +45,7 @@ def test_build_data_source_unknown_type_raises_source_error(tmp_path: Path) -> N
 
 def test_build_data_source_text_types(tmp_path: Path) -> None:
     """All text-like input types return TextDataSource."""
-    from rey_lib.llm.datasource import TextDataSource
+    from rey_lib.analysis import TextDataSource
 
     f = tmp_path / "test.txt"
     f.write_text("hello", encoding="utf-8")

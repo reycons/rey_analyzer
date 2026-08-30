@@ -27,7 +27,11 @@ from __future__ import annotations
 from typing import Any
 
 from rey_lib.files import read_text_file
-from rey_lib.llm.package import LlmPackageContract, LlmPackageInput, build_package
+from rey_lib.analysis.package import (
+    LlmPackageContract,
+    LlmPackageInput,
+    build_package,
+)
 from rey_lib.logs import get_logger, log_run_record
 
 _logger = get_logger(__name__)
@@ -112,7 +116,7 @@ def build_analysis_package(
     declared_references = None
     if contract_path:
         try:
-            from rey_lib.llm.contract import load as _load_contract
+            from rey_lib.analysis.contract import load as _load_contract
             declared_references = _load_contract(contract_path).raw_frontmatter.get("references")
         except Exception as exc:  # pragma: no cover - evidence never masks execution
             _logger.warning("Contract references unavailable for evidence: %s", exc)

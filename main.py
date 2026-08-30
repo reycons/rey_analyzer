@@ -3,7 +3,7 @@ rey_analyzer — entry point.
 
 Configurable assembly-line application for contract-driven LLM analysis.
 Consumes files from configured inbox folders, runs them through analysis
-contracts via rey_lib.llm, writes result artifacts, and moves files to
+contracts via rey_lib.analysis, writes result artifacts, and moves files to
 final folders.
 
 Usage
@@ -211,7 +211,7 @@ def _cmd_build_payload(ctx: Any, args: argparse.Namespace, log: Any) -> None:
 
 def _cmd_status(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Print the status of a past run by run_id."""
-    from rey_lib.llm.records import load_latest_record  # noqa: PLC0415
+    from rey_lib.analysis import load_latest_record  # noqa: PLC0415
 
     records_path = Path(ctx.app.records_path).expanduser().resolve()
     record = load_latest_record(records_path, args.run_id)
@@ -223,7 +223,7 @@ def _cmd_status(ctx: Any, args: argparse.Namespace, log: Any) -> None:
 
 def _cmd_approve(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Approve a pending-approval run and move its file to success."""
-    from rey_lib.llm.records import approve, load_latest_record, store_record  # noqa: PLC0415
+    from rey_lib.analysis import approve, load_latest_record, store_record  # noqa: PLC0415
 
     records_path = Path(ctx.app.records_path).expanduser().resolve()
     record = load_latest_record(records_path, args.run_id)
@@ -237,7 +237,7 @@ def _cmd_approve(ctx: Any, args: argparse.Namespace, log: Any) -> None:
 
 def _cmd_reject(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Reject a pending-approval run and move its file to failed."""
-    from rey_lib.llm.records import load_latest_record, reject, store_record  # noqa: PLC0415
+    from rey_lib.analysis import load_latest_record, reject, store_record  # noqa: PLC0415
 
     records_path = Path(ctx.app.records_path).expanduser().resolve()
     record = load_latest_record(records_path, args.run_id)

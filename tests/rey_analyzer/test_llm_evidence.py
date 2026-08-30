@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import rey_analyzer.evidence as evidence
 from rey_analyzer.evidence import build_analysis_package, emit_llm_evidence
-from rey_lib.llm.package import LlmPackageInput
+from rey_lib.analysis import LlmPackageInput
 
 
 def _request(tmp_path: Path) -> SimpleNamespace:
@@ -148,7 +148,10 @@ def test_evidence_module_does_not_touch_the_provider_wire() -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module)
-    assert "rey_lib.llm.package" in imported          # the canonical builder
+    assert "rey_lib.analysis.package" in imported          # the canonical builder
+    # The retired names plus the paths that replaced them: evidence builds a
+    # package, it never invokes a model.
     for forbidden in ("rey_lib.llm.runner", "rey_lib.llm.llm_utils",
-                      "rey_lib.llm.adapters", "rey_lib.llm.providers"):
+                      "rey_lib.llm.adapters", "rey_lib.llm.providers",
+                      "rey_lib.analysis.execution", "rey_lib.ai"):
         assert forbidden not in imported, forbidden

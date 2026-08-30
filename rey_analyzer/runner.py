@@ -31,8 +31,8 @@ from rey_lib.files.file_utils import (
     move_to_success,
     read_text_file,
 )
-from rey_lib.llm.analysis import Analyzer
-from rey_lib.llm.package import LlmPackageContract, LlmPackageInput, build_package
+from rey_lib.analysis import Analyzer
+from rey_lib.analysis import LlmPackageContract, LlmPackageInput, build_package
 from rey_lib.errors.error_utils import build_safe_error_payload
 from rey_lib.logs import (
     get_logger,
@@ -42,7 +42,7 @@ from rey_lib.logs import (
     log_row_count,
     log_validation_result,
 )
-from rey_lib.llm.datasource import (
+from rey_lib.analysis import (
     CSVDataSource,
     DataSource,
     ExcelDataSource,
@@ -453,8 +453,8 @@ def build_payload(
     dict[str, Any]
         Keys: analysis_name, data_file, rows_sampled, content.
     """
-    from rey_lib.llm.analysis import load_analysis_contract  # noqa: PLC0415
-    from rey_lib.llm.preparation import prepare  # noqa: PLC0415
+    from rey_lib.analysis import load_analysis_contract  # noqa: PLC0415
+    from rey_lib.analysis import prepare  # noqa: PLC0415
 
     # Resolve contract path the same way build_request does.
     contracts_root_value = getattr(ctx, "contracts_root", None)

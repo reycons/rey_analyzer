@@ -21,8 +21,8 @@ from typing import Any
 
 from rey_lib.encryption import sha256_file
 from rey_lib.files.file_utils import run_artifact_path, write_file
-from rey_lib.llm.artifacts import LocalArtifactStore
-from rey_lib.llm.analysis import AnalysisResult
+from rey_lib.artifacts import LocalArtifactStore
+from rey_lib.analysis import AnalysisResult
 from rey_lib.logs import get_logger, log_artifact_reference
 
 from rey_analyzer.requests import AnalysisRequest

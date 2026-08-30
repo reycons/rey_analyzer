@@ -7,8 +7,8 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from rey_lib.llm.analysis import load_analysis_contract
-from rey_lib.llm.runner import _load_sidecar_schema
+from rey_lib.analysis import load_analysis_contract
+from rey_lib.analysis.contract import load_sidecar_schema as _load_sidecar_schema
 
 
 CONTRACT = (

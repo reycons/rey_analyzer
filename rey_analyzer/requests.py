@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from rey_lib.encryption import sha256_bytes, sha256_file
-from rey_lib.llm.analysis import load_analysis_contract
+from rey_lib.analysis import load_analysis_contract
 
 from rey_analyzer.error_utils import ConfigurationError, SourceError
 
