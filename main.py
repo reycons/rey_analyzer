@@ -91,7 +91,7 @@ def main() -> int:
             # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
             # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
             if not getattr(args, "ctx_file", None):
-                finalize_run_log(run_log)
+                finalize_run_log(run_log, ai=getattr(ctx, "shared_ai", None))
 
 
 def _run_workflow_command(ctx: Any, args: argparse.Namespace) -> int:
