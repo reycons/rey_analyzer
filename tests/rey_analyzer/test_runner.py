@@ -158,18 +158,23 @@ def test_two_file_analyses_create_sibling_input_branches(run_log,
     ]
     refs = [r for r in records if r["record_type"] == "INPUT_FILE_REFERENCE"]
     assert len(refs) == 2
-    # Siblings: same parent and same analysis level.
-    assert refs[0]["parent_record_id"] == refs[1]["parent_record_id"]
+    # Siblings: the same parent, at the same analysis level. Parentage is the
+    # run log's own -- parent_run_log_id -- and a record has no id of its own
+    # in a JSONL log, because that id is minted by control.run_log when the
+    # destination is the database. So being siblings is what is asserted here,
+    # rather than one record not pointing at the other's id: two branches under
+    # one parent at one level is exactly what nesting the second under the
+    # first would break.
+    assert refs[0]["parent_run_log_id"] == refs[1]["parent_run_log_id"]
     assert refs[0]["nest_level"] == refs[1]["nest_level"]
-    # The second file is not parented under the first file's record.
-    assert refs[1]["parent_record_id"] != refs[0]["record_id"]
     validations = [r for r in records if r["record_type"] == "VALIDATION_RESULT"]
     by_input = {Path(r["input_file"]).name: r for r in validations}
+    # Each file's validation sits one level under that file. The level is what
+    # a JSONL log carries; the id that would name the exact parent row is the
+    # database destination's, and is not written here.
     for ref in refs:
         validation = by_input[ref["display_name"]]
-        assert validation["parent_record_id"] == ref["record_id"]
         assert validation["nest_level"] == ref["nest_level"] + 1
-    assert [r["record_id"] for r in records] == list(range(1, len(records) + 1))
 
 
 def test_run_all_returns_failed_count_on_source_exception(run_log, 

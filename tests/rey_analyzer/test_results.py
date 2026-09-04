@@ -88,7 +88,11 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(run_l
         if r["record_type"] == "ARTIFACT_REFERENCE"
         and r.get("artifact_role") == "analysis_context"
     )
-    assert result_artifact["record_subgroup"] == "artifacts"
+    # The group the record states, not the per-type default. Stamping every
+    # ARTIFACT_REFERENCE "artifacts" collapsed output_files, profiles,
+    # analysis_context and analysis_results into one indistinguishable group,
+    # so a record naming its own artifact_group is believed.
+    assert result_artifact["record_subgroup"] == "analysis_results"
     assert result_artifact["path"] == str(result_file)
     assert result_artifact["run_id"] == "run-pipe-1"
     assert result_artifact["producer"] == "analyzer"
@@ -96,7 +100,7 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(run_l
     assert result_artifact["source_path"] == str(tmp_path / "input.csv")
     assert result_artifact["safe_to_preview"] is True
 
-    assert context_artifact["record_subgroup"] == "artifacts"
+    assert context_artifact["record_subgroup"] == "analysis_context"
     assert context_artifact["path"] == str(context_file)
     assert context_artifact["producer"] == "analyzer"
     assert context_artifact["artifact_type"] == "analysis_context"
