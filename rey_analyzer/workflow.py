@@ -49,10 +49,12 @@ APP_NAME = "rey_analyzer"
 # ---------------------------------------------------------------------------
 
 def build_process_registry() -> dict[str, Any]:
-    """Return the analyzer's workflow process registry (name -> handler).
+    """Return the analyzer's approved implementation catalog (key -> handler).
 
-    One process, ``analysis``, wraps the existing ``run_source`` unchanged. Steps
-    may only call this registered process name, never arbitrary Python from YAML.
+    Not workflow membership. It answers what this application will let the
+    engine call; which processes exist, and how many name one of these, is the
+    workflow's declaration. Every key here is published in this application's
+    registration, and the engine refuses a workflow naming anything else.
     """
     def analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext) -> StepResult:
         return _process_analysis(ctx, config, run)

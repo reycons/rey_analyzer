@@ -14,10 +14,9 @@ installation enables it and where it logs are that installation's answers, held
 in its ``apps:`` declaration. A registration carrying them would let a package
 decide something about an installation it has never seen.
 
-``workflow_operations`` is the approved surface a workflow may invoke. It is
-empty here: which operations this application approves is decided when the
-coordinator begins dispatching through them, and an application that has
-published nothing has approved nothing.
+``workflow_operations`` is the approved surface a workflow may invoke, and the
+contract an author writes a process against. A workflow may name exactly these,
+and each declares the settings a step configures it with.
 """
 
 from __future__ import annotations
@@ -235,6 +234,27 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
                                               'value_type': 'string'}]}]}
 
 
+#: The operations a workflow may name, and what each is configured with.
+#:
+#: ``source`` is a data-source name. Publication says the setting exists and is
+#: required; which data source that name identifies, and which analysis config
+#: that source in turn names, stay the implementation's answers.
+WORKFLOW_OPERATIONS: list[dict[str, Any]] = [
+    {
+        "name": "analysis",
+        "description": "Run one named analyzer data source through its analysis config.",
+        "parameters": [
+            {
+                "name": "source",
+                "required": True,
+                "value_type": "string",
+                "description": "Data-source name declared under data_sources.",
+            },
+        ],
+    },
+]
+
+
 def get_registration() -> dict[str, Any]:
     """Return this application's registration.
 
@@ -245,5 +265,5 @@ def get_registration() -> dict[str, Any]:
         "name": APPLICATION_NAME,
         "entry_point": "main.py",
         "cli": CLI,
-        "workflow_operations": [],
+        "workflow_operations": WORKFLOW_OPERATIONS,
     }
