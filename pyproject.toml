@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rey_analyzer"
+version = "0.1.0"
+description = "Contract-driven LLM analysis over configured data sources or files."
+requires-python = ">=3.11"
+# Declared in requirements.txt, which stays the dependency source. This file
+# exists to publish package metadata, not to take over dependency management.
+dependencies = []
+
+# Discovery, and only discovery. Installing this distribution is what makes the
+# application visible to bootstrap; one entry point per application, never one
+# per operation, which would make packaging the workflow dispatcher.
+#
+# It publishes package metadata and nothing else. Invocation is unchanged: the
+# app still runs as {venv}/bin/python {app_path}/main.py.
+[project.entry-points."rey.applications"]
+rey_analyzer = "rey_analyzer.registration:get_registration"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rey_analyzer*"]
