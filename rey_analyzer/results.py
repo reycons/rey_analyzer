@@ -26,6 +26,7 @@ from rey_lib.analysis import AnalysisResult
 from rey_lib.logs import get_logger, log_artifact_reference
 
 from rey_analyzer.requests import AnalysisRequest
+from rey_analyzer.error_utils import AnalyzerError
 
 __all__ = ["AnalyzerResultArtifacts", "build_artifact_store", "write_result"]
 
@@ -232,7 +233,7 @@ def _result_artifact_name(request: AnalysisRequest) -> str:
     safe_request_id = re.sub(r"[^A-Za-z0-9._-]+", "_", request_id)
     safe_request_id = safe_request_id.strip(" ._")
     if not safe_request_id:
-        raise ValueError("Analyzer result artifacts require a request_id.")
+        raise AnalyzerError("Analyzer result artifacts require a request_id.")
     return f"{_artifact_step_name(request)}.{safe_request_id}"
 
 
