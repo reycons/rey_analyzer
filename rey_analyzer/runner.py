@@ -33,10 +33,8 @@ from rey_lib.files.file_utils import (
 )
 from rey_lib.analysis import Analyzer
 from rey_lib.analysis import LlmPackageContract, LlmPackageInput, build_package
-from rey_lib.errors.error_utils import build_safe_error_payload
 from rey_lib.logs import (
     get_logger,
-    log_error,
     log_input_discovered,
     log_input_file_reference,
     log_row_count,
@@ -406,12 +404,7 @@ def run_analysis(
         return "failed"
 
     except Exception as exc:  # noqa: BLE001
-        _logger.error("analysis failed for '%s': %s", file_path.name, exc)
-        # Record the actual caught exception as a structured ERROR on the shared run
-        # log through the common error path (as every Rey app does), so the real
-        # failure survives beyond the Python log line and the failed result.
-        log_error(run_log, **build_safe_error_payload(
-            exc, message=f"analysis failed for '{file_path.name}'"))
+        _logger.error("analysis failed for '%s': %s", file_path.name, exc, exc_info=exc)
         if move_files:
             try:
                 move_to_failed(processing, source_cfg, state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None))
