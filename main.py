@@ -206,7 +206,7 @@ def _cmd_build_payload(ctx: Any, args: argparse.Namespace, log: Any) -> None:
         result["analysis_name"],
         result["rows_sampled"],
     )
-    print(json.dumps(result, ensure_ascii=False))
+    log.info("%s", json.dumps(result, ensure_ascii=False))
 
 
 def _cmd_status(ctx: Any, args: argparse.Namespace, log: Any) -> None:
