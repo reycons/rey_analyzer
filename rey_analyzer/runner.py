@@ -47,8 +47,12 @@ from rey_lib.analysis import (
     TextDataSource,
 )
 
+from rey_lib.errors.error_utils import AppError
+
 from rey_analyzer.error_utils import (
+    AnalysisError,
     ConfigurationError,
+    FileMovementError,
     SourceError,
 )
 from rey_analyzer.preprocessor import build_incident_packet
@@ -117,10 +121,17 @@ def run_all(ctx: Any, run_log) -> tuple[int, int, int]:
             total_failed += failed
             total_pending += pending
         except Exception as exc:  # noqa: BLE001
-            _logger.error("source '%s' error: %s", source_cfg.name, exc)
             total_failed += 1
             if stop_on_error:
+                # Propagated, so not reported here: the boundary reports it.
                 raise
+            # Consumed -- the next source still runs -- so reported here, and
+            # the reported AppError is the failure (rule 79).
+            error = exc if isinstance(exc, AppError) else SourceError(
+                f"source '{source_cfg.name}' failed")
+            if error is not exc:
+                error.__cause__ = exc
+            error.report(f"running source {source_cfg.name}", source=__name__)
 
     return total_success, total_failed, total_pending
 
@@ -404,12 +415,20 @@ def run_analysis(
         return "failed"
 
     except Exception as exc:  # noqa: BLE001
-        _logger.error("analysis failed for '%s': %s", file_path.name, exc, exc_info=exc)
+        # Consumed -- the file fails and the next one runs -- so reported here.
+        error = exc if isinstance(exc, AppError) else AnalysisError(
+            f"analysis failed for '{file_path.name}'")
+        if error is not exc:
+            error.__cause__ = exc
+        error.report(f"analysing {file_path.name}", source=__name__)
         if move_files:
             try:
                 move_to_failed(processing, source_cfg, state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None))
-            except Exception:  # noqa: BLE001
-                _logger.error("could not move '%s' to failed.", file_path.name)
+            except Exception as move_exc:  # noqa: BLE001
+                # Handled -- the file stays failed -- so reported here.
+                movement = FileMovementError(f"could not move '{file_path.name}' to failed")
+                movement.__cause__ = move_exc
+                movement.report(f"moving {file_path.name} to failed", source=__name__)
         log_validation_result(run_log,
             validation_name="analysis_result",
             status="failed",

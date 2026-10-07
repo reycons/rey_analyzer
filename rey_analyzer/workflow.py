@@ -132,8 +132,10 @@ def run_process_workflow(
     )
     if run.status != "success":
         failed = next((o for o in run.outcomes if o.status == "failed"), None)
-        _logger.error("workflow '%s' failed at step: %s",
-                      workflow_name, failed.id if failed else "?")
+        # Status: the workflow owns its failed step and reported it; this
+        # operation's failed outcome is run_app_operation's to report (rule 79).
+        _logger.warning("workflow '%s' failed at step: %s",
+                        workflow_name, failed.id if failed else "?")
         return 1
     _logger.info("workflow '%s' complete (%s).",
                  workflow_name, "apply" if apply else "dry-run")

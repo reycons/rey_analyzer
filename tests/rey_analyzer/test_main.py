@@ -36,8 +36,16 @@ def _ctx() -> SimpleNamespace:
     )
 
 
-def test_run_source_returns_nonzero_when_any_file_failed() -> None:
-    """A partial file failure must fail the process for pipeline_coordinator."""
+def test_run_source_fails_when_any_file_failed() -> None:
+    """A partial file failure must fail the process for pipeline_coordinator.
+
+    It fails by raising AnalysisError, which app_runtime reports once (rule 79),
+    rather than by returning 1 for a generic nonzero-result error.
+    """
+    import pytest
+
+    from rey_analyzer.error_utils import AnalysisError
+
     source = SimpleNamespace(analysis_config="analysis")
 
     with (
@@ -50,8 +58,9 @@ def test_run_source_returns_nonzero_when_any_file_failed() -> None:
         patch.object(analyzer_main, "app_runtime",
                  new=lambda **kw: nullcontext((kw["ctx"], _stub_run_log()))),
         patch.object(analyzer_main, "finalize_run_log"),
+        pytest.raises(AnalysisError, match="run-source failed: 1 file"),
     ):
-        assert analyzer_main.main() == 1
+        analyzer_main.main()
 
 
 def test_submit_file_returns_nonzero_when_analysis_failed() -> None:

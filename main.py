@@ -30,7 +30,6 @@ preparse_config_args()
 
 from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_from_args
 from rey_lib.config.ctx import find_in_ctx
-from rey_lib.errors.error_utils import AppError
 from rey_lib.config.bootstrap import app_runtime
 from rey_lib.logs import (
     get_logger,
@@ -38,7 +37,7 @@ from rey_lib.logs import (
 from rey_lib.run_lifecycle import run_app_operation
 from rey_lib.logs import finalize_run_log
 
-from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
+from rey_analyzer.error_utils import AnalysisError, AnalyzerError, ConfigurationError
 from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
 from rey_analyzer.workflow import run_process_workflow
 
@@ -70,20 +69,14 @@ def main() -> int:
         log = get_logger(__name__)
         log.info("rey_analyzer starting — command=%s", args.command)
 
+        # A failure propagates as its own AppError; app_runtime normalises
+        # anything else and reports it once (rule 79).
         try:
             return run_app_operation(
                 ctx,
                 run_log, str(args.command),
                 lambda: _execute_command(ctx, run_log, args, log),
             )
-
-        except (AnalyzerError, AppError) as exc:
-            log.error("rey_analyzer error: %s", exc, exc_info=exc)
-            raise AppError(f"rey_analyzer error: {exc}") from exc
-
-        except Exception as exc:  # noqa: BLE001  — top-level safety net only
-            log.error("Unexpected error in rey_analyzer: %s", exc, exc_info=exc)
-            raise AppError(f"Unexpected error in rey_analyzer: {exc}") from exc
 
         finally:
             # Top-level owner (standalone run, not a pipeline step) explicitly creates the
@@ -116,8 +109,8 @@ def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> i
             success, failed, pending,
         )
         if failed:
-            log.error("rey_analyzer run failed: %d file(s) failed.", failed)
-            return 1
+            # The operation fails: raised, reported once at the boundary (rule 79).
+            raise AnalysisError(f"run failed: {failed} file(s) failed")
 
     elif args.command == "run-source":
         source_cfg   = _resolve_source(ctx, args.source)
@@ -128,8 +121,8 @@ def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> i
             success, failed, pending,
         )
         if failed:
-            log.error("run-source failed: %d file(s) failed.", failed)
-            return 1
+            # The operation fails: raised, reported once at the boundary (rule 79).
+            raise AnalysisError(f"run-source failed: {failed} file(s) failed")
 
     elif args.command == "run-workflow":
         # Same application-operation lifecycle as run-source: the workflow merely
