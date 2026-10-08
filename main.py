@@ -32,7 +32,7 @@ from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_f
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.config.bootstrap import app_runtime
 from rey_lib.logs import (
-    get_logger,
+    AppLogger,
 )
 from rey_lib.run_lifecycle import run_app_operation
 from rey_lib.logs import finalize_run_log
@@ -66,7 +66,7 @@ def main() -> int:
     # created. It encloses everything below, so any existing finalization
     # runs while those objects are still live and collection happens after.
     with app_runtime(ctx=ctx, operation=args.command) as (ctx, run_log):
-        log = get_logger(__name__)
+        log = AppLogger(__name__)
         log.info("rey_analyzer starting — command=%s", args.command)
 
         # A failure propagates as its own AppError; app_runtime normalises

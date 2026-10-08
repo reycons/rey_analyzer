@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from rey_lib.config.ctx import find_in_ctx
-from rey_lib.logs import get_logger
+from rey_lib.logs import AppLogger
 from rey_lib.workflow import (
     RunContext,
     StepResult,
@@ -37,7 +37,7 @@ __all__ = [
     "run_process_workflow",
 ]
 
-_logger = get_logger(__name__)
+_logger = AppLogger(__name__)
 
 # This app's identity. Workflow ownership is ``app + name``; rey_analyzer consumes
 # only workflows assigned to itself from the resolved ctx (never another app's).

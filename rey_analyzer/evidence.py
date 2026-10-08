@@ -32,9 +32,9 @@ from rey_lib.analysis.package import (
     LlmPackageInput,
     build_package,
 )
-from rey_lib.logs import get_logger, log_run_record
+from rey_lib.logs import AppLogger, log_run_record
 
-_logger = get_logger(__name__)
+_logger = AppLogger(__name__)
 
 # The default logical input a rey_analyzer analysis supplies. Named for lineage.
 _ANALYSIS_INPUT_NAME = "analysis_input"

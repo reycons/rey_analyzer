@@ -34,7 +34,7 @@ from rey_lib.files.file_utils import (
 from rey_lib.analysis import Analyzer
 from rey_lib.analysis import LlmPackageContract, LlmPackageInput, build_package
 from rey_lib.logs import (
-    get_logger,
+    AppLogger,
     log_input_discovered,
     log_input_file_reference,
     log_row_count,
@@ -67,7 +67,7 @@ __all__ = [
     "run_source",
 ]
 
-_logger = get_logger(__name__)
+_logger = AppLogger(__name__)
 
 # Maps input_type config values to DataSource construction strategies.
 # Text-like formats are all passed as raw text — the LLM reads them as-is.

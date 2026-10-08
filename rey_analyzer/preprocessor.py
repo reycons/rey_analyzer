@@ -26,13 +26,13 @@ from pathlib import Path
 from typing import Any
 
 from rey_lib.files.file_utils import read_text_file
-from rey_lib.logs import get_logger
+from rey_lib.logs import AppLogger
 
 from rey_analyzer.error_utils import SourceError
 
 __all__ = ["build_incident_packet"]
 
-_logger = get_logger(__name__)
+_logger = AppLogger(__name__)
 
 # Fields treated as stack traces for width limiting.
 _STACK_FIELDS: frozenset[str] = frozenset({"exception", "stack_trace", "traceback"})
