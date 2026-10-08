@@ -102,14 +102,20 @@ def make_run_log(
     Run logging is owned by ``RunLog``; a test that writes records takes one
     rather than handing logging a context to read fields off.
     """
+    from pathlib import Path
+
+    from rey_lib.logs.log_record_builder import LogRecordBuilder
+    from rey_lib.logs.log_writer import JsonLogWriter, LogWriter
     from rey_lib.logs.run_log import RunLog
 
+    # The JSONL output is the logging writer's (logging.run_store: jsonl).
+    json_path = path or str(Path(tmp_path) / f"{app or 'app'}.{run_timestamp}.jsonl")
     return RunLog(
         app=app,
         run_id=run_id,
         run_timestamp=run_timestamp,
-        log_dir=None if path else str(tmp_path),
-        path=path,
+        writer=LogWriter("jsonl", json=JsonLogWriter(json_path)),
+        builder=LogRecordBuilder(run_id=run_id, run_timestamp=run_timestamp, app=app),
     )
 
 
