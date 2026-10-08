@@ -10,9 +10,9 @@ def _stub_run_log():
     from rey_lib.logs.log_writer import DatabaseLogWriter, LogWriter
     from rey_lib.logs.run_log import RunLog
 
-    # A database output with no connection: its writes degrade to None.
+    # A database output with no Control: its writes degrade to None.
     return RunLog(app="rey_analyzer", run_id="test-run", run_timestamp="20260822_000000",
-                  writer=LogWriter("db", database=DatabaseLogWriter(connection=None)),
+                  writer=LogWriter("db", database=DatabaseLogWriter(control=None)),
                   builder=LogRecordBuilder(run_id="test-run", run_timestamp="20260822_000000"))
 from unittest.mock import patch
 
