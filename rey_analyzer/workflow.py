@@ -26,6 +26,7 @@ from rey_lib.logs import AppLogger
 from rey_lib.workflow import (
     RunContext,
     StepResult,
+    hydrate_workflow,
     run_workflow as coordinate_workflow,
 )
 
@@ -122,8 +123,9 @@ def run_process_workflow(
     }
     run = coordinate_workflow(
         ctx,
-        wf,
+        hydrate_workflow(wf, installation=ctx.installation.name),
         build_process_registry(),
+        application=APP_NAME,
         apply=apply,
         step=step,
         from_step=from_step,
