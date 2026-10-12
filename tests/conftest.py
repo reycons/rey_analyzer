@@ -54,7 +54,7 @@ def sample_analysis_cfg() -> SimpleNamespace:
     """Minimal analysis config Namespace."""
     return SimpleNamespace(
         name              = "etl_log_failure",
-        contract          = "contracts/etl_log_failure/v01.md",
+        contract          = "etl_log_failure",
         llm_execution_profile = "primary",
         idempotency_mode  = "reuse_success",
         requires_approval = False,

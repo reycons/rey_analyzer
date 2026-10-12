@@ -245,14 +245,15 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(run_log,
         input_hash="profile-hash",
         contract_hash="contract-hash",
         schema_hash="schema-hash",
-        contract_path=tmp_path / "contract.yaml",
+        contract=SimpleNamespace(
+            name="c", base=SimpleNamespace(text="name: c\nversion: 1\n"),
+        ),
         file_path=profile,
         analysis_name="loader_config",
         source_name="profile_source",
         llm_profile_name="profile",
         requires_approval=False,
     )
-    request.contract_path.write_text("name: c\nversion: 1\n", encoding="utf-8")
 
     captured: dict[str, object] = {}
     validations: list[dict[str, object]] = []
@@ -326,7 +327,7 @@ def test_run_analysis_supplies_resolved_file_set_as_second_input(run_log,
         "analysis_name": "loader_config",
         "input_file": str(profile),
         "input_hash": "profile-hash",
-        "contract_path": str(request.contract_path),
+        "contract_name": "c",
         "contract_hash": "contract-hash",
         "schema_hash": "schema-hash",
         "model_profile": "profile",

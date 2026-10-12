@@ -21,13 +21,16 @@ build_request        Factory: constructs an AnalysisRequest from config and file
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rey_lib.encryption import sha256_bytes, sha256_file
-from rey_lib.analysis import load_analysis_contract
+from rey_lib.encryption import sha256_bytes, sha256_file, sha256_text
+from rey_lib.ai.errors import AIConfigurationError
+from rey_lib.analysis import analysis_contract
+from rey_lib.errors.error_utils import ConfigError
 
 from rey_analyzer.error_utils import ConfigurationError, SourceError
 
@@ -53,13 +56,14 @@ class AnalysisRequest:
         Absolute path of the file being analyzed (in processing_path).
     input_hash : str
         SHA-256 hex digest of the file bytes.
-    contract_path : Path
-        Resolved path to the analysis contract file.
+    contract : Any
+        The AnalysisContract, read by name from control.analysis_contract.
     contract_hash : str
-        Hash from the loaded AnalysisContract.
+        Hash from the AnalysisContract.
     schema_hash : str
-        SHA-256 hex digest of the schema file bytes, or empty string if
-        no schema file is configured.
+        Hash of the contract's embedded output_schema as canonical JSON --
+        the definition the execution record uses -- or empty string when the
+        contract declares none.
     llm_profile_name : str
         Name of the LLM execution profile to use.
     idempotency_mode : str
@@ -74,7 +78,7 @@ class AnalysisRequest:
     analysis_name:     str
     file_path:         Path
     input_hash:        str
-    contract_path:     Path
+    contract:          Any
     contract_hash:     str
     schema_hash:       str
     llm_profile_name:  str
@@ -91,8 +95,9 @@ def build_request(
     """
     Construct an AnalysisRequest from config objects and the target file.
 
-    Computes all identity hashes, loads the contract for its hash, and
-    resolves the schema hash when a schema file is configured.
+    Computes all identity hashes. The contract is read by its name from
+    control.analysis_contract (backlog 903); its hash and the hash of its
+    embedded output_schema are part of the request identity.
 
     Parameters
     ----------
@@ -103,8 +108,7 @@ def build_request(
     file_path : Path
         Absolute path to the file to be analyzed (in inbox or processing).
     ctx : Any, optional
-        Application context providing the installation-owned
-        ``ctx.contracts_root`` used to resolve contract paths.
+        Application context; its ``shared_control`` reads the contract.
 
     Returns
     -------
@@ -116,7 +120,7 @@ def build_request(
     SourceError
         If file_path does not exist or cannot be read.
     ConfigurationError
-        If the contract path or analysis config fields are missing.
+        If the contract or analysis config fields are missing.
     """
     if not file_path.exists():
         raise SourceError(f"Input file not found: {file_path}")
@@ -128,30 +132,22 @@ def build_request(
 
     llm_profile_name = _resolve_llm_execution_profile(analysis_cfg)
 
-    contracts_root = _contracts_root(ctx)
-    contract_path = _resolve_path(
-        getattr(analysis_cfg, "contract", None),
-        "contract",
-        contracts_root,
-    )
     try:
-        contract      = load_analysis_contract(contract_path)
-        contract_hash = contract.hash
-    except Exception as exc:
+        contract = analysis_contract(
+            getattr(ctx, "shared_control", None) if ctx is not None else None,
+            getattr(analysis_cfg, "contract", None),
+        )
+    except (ConfigError, AIConfigurationError) as exc:
         raise ConfigurationError(
-            f"Cannot load contract from {contract_path}: {exc}"
+            f"Cannot read analysis contract "
+            f"'{getattr(analysis_cfg, 'contract', None)}': {exc}"
         ) from exc
+    contract_hash = contract.hash
 
-    schema_file = getattr(analysis_cfg, "schema", None)
-    schema_hash = ""
-    if schema_file:
-        schema_path = _resolve_path(schema_file, "schema", contracts_root)
-        try:
-            schema_hash = sha256_file(schema_path)
-        except OSError as exc:
-            raise ConfigurationError(
-                f"Cannot read schema file: {schema_path}"
-            ) from exc
+    output_schema = contract.spec.output_schema
+    schema_hash = (
+        sha256_text(json.dumps(output_schema, sort_keys=True)) if output_schema else ""
+    )
 
     request_id = _compute_request_id(input_hash, contract_hash, schema_hash)
 
@@ -162,7 +158,7 @@ def build_request(
         analysis_name    = analysis_cfg.name,
         file_path        = file_path,
         input_hash       = input_hash,
-        contract_path    = contract_path,
+        contract         = contract,
         contract_hash    = contract_hash,
         schema_hash      = schema_hash,
         llm_profile_name = llm_profile_name,
@@ -220,29 +216,3 @@ def _resolve_llm_execution_profile(analysis_cfg: Any) -> str:
 def _hash_bytes(data: bytes) -> str:
     """Return the shared SHA-256 hex digest for raw bytes."""
     return sha256_bytes(data)
-
-
-def _contracts_root(ctx: Any) -> Path:
-    """Return the explicitly configured installation-owned contract root."""
-
-    root = getattr(ctx, "contracts_root", None) if ctx is not None else None
-    if not root:
-        raise ConfigurationError(
-            "Rey Analyzer requires installation-owned 'contracts_root'; "
-            "application-relative contract fallback is prohibited."
-        )
-    return Path(str(root)).expanduser().resolve()
-
-
-def _resolve_path(relative: str | None, label: str, base: Path) -> Path:
-    """Resolve a contract or schema path against base.
-
-    Absolute paths are returned as-is. Relative paths are resolved
-    against base.
-    """
-    if not relative:
-        raise ConfigurationError(f"analysis_config.{label} is not set.")
-    p = Path(relative)
-    if p.is_absolute():
-        return p.resolve()
-    return (base / relative).resolve()

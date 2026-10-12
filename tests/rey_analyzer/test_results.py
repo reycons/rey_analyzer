@@ -16,7 +16,7 @@ def _request(run_id: str, file_path: Path) -> SimpleNamespace:
     return SimpleNamespace(
         run_id=run_id, request_id="req-1", source_name="src",
         analysis_name="an", file_path=file_path, input_hash="ih",
-        contract_path=Path("contract.md"), contract_hash="ch",
+        contract=SimpleNamespace(name="c"), contract_hash="ch",
         schema_hash="sh", idempotency_mode="strict", llm_profile_name="precision",
     )
 
@@ -66,7 +66,8 @@ def test_write_result_writes_flat_per_request_result_and_context_artifacts(run_l
     assert context_record["model"] == "test-model"
     assert context_record["source_artifact_path"] == str(tmp_path / "input.csv")
     assert context_record["source_artifact_sha256"] == "ih"
-    assert context_record["contract_path"] == "contract.md"
+    assert context_record["contract_name"] == "c"
+    assert "contract_path" not in context_record
     assert context_record["contract_hash"] == "ch"
     assert context_record["request_id"] == "req-1"
     assert context_record["result_artifact_path"] == str(result_file)

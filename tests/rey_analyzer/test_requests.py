@@ -11,7 +11,27 @@ import rey_analyzer.requests as requests_mod
 from rey_analyzer.error_utils import ConfigurationError, SourceError
 from rey_analyzer.requests import _compute_request_id, _hash_bytes, build_request
 
-_CONTRACT_ROOT = Path(__file__).parents[2]
+
+
+class _Control:
+    """The runtime's Control, answering get_analysis_contract from a mapping."""
+
+    installation_id = 7
+
+    def __init__(self, rows: dict | None = None) -> None:
+        self.rows = rows or {}
+
+    def analysis_contract(self, name: str) -> dict | None:
+        return self.rows.get(name)
+
+
+def _stored(name: str) -> SimpleNamespace:
+    """What the seam answers: a parsed contract with no output schema."""
+    return SimpleNamespace(name=name, hash="contract_hash",
+                           spec=SimpleNamespace(output_schema=None))
+
+
+_CTX = SimpleNamespace(shared_control=_Control())
 
 
 def test_hash_bytes_is_sha256_hex(tmp_path: Path) -> None:
@@ -61,10 +81,10 @@ def test_build_request_missing_contract_raises_config_error(
     sample_jsonl_file: Path,
     tmp_path: Path,
 ) -> None:
-    """build_request raises ConfigurationError when contract path is invalid."""
+    """build_request raises ConfigurationError when no contract has that name."""
     bad_cfg = SimpleNamespace(
         name              = "bad",
-        contract          = "contracts/nonexistent/v01.md",
+        contract          = "nonexistent",
         llm_execution_profile = "primary",
         idempotency_mode  = "reuse_success",
         requires_approval = False,
@@ -75,7 +95,7 @@ def test_build_request_missing_contract_raises_config_error(
             sample_source_cfg,
             bad_cfg,
             sample_jsonl_file,
-            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+            ctx=_CTX,
         )
 
 
@@ -97,7 +117,7 @@ def test_build_request_no_contract_field_raises_config_error(
             sample_source_cfg,
             cfg,
             sample_jsonl_file,
-            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+            ctx=_CTX,
         )
 
 
@@ -110,15 +130,15 @@ def test_build_request_uses_llm_execution_profile(
     """build_request reads the canonical llm_execution_profile field."""
     monkeypatch.setattr(
         requests_mod,
-        "load_analysis_contract",
-        lambda path: SimpleNamespace(hash="contract_hash"),
+        "analysis_contract",
+        lambda control, name: _stored(name),
     )
 
     req = build_request(
         sample_source_cfg,
         sample_analysis_cfg,
         sample_jsonl_file,
-        ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+        ctx=_CTX,
     )
 
     assert req.llm_profile_name == "primary"
@@ -133,8 +153,8 @@ def test_build_request_accepts_legacy_llm_profile(
     """build_request temporarily accepts legacy llm_profile for compatibility."""
     monkeypatch.setattr(
         requests_mod,
-        "load_analysis_contract",
-        lambda path: SimpleNamespace(hash="contract_hash"),
+        "analysis_contract",
+        lambda control, name: _stored(name),
     )
     legacy_cfg = SimpleNamespace(**vars(sample_analysis_cfg))
     delattr(legacy_cfg, "llm_execution_profile")
@@ -144,7 +164,7 @@ def test_build_request_accepts_legacy_llm_profile(
         sample_source_cfg,
         legacy_cfg,
         sample_jsonl_file,
-        ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+        ctx=_CTX,
     )
 
     assert req.llm_profile_name == "legacy_primary"
@@ -164,7 +184,7 @@ def test_build_request_rejects_both_execution_profile_fields(
             sample_source_cfg,
             bad_cfg,
             sample_jsonl_file,
-            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+            ctx=_CTX,
         )
 
 
@@ -182,16 +202,17 @@ def test_build_request_requires_execution_profile(
             sample_source_cfg,
             bad_cfg,
             sample_jsonl_file,
-            ctx=SimpleNamespace(contracts_root=_CONTRACT_ROOT),
+            ctx=_CTX,
         )
 
 
-def test_missing_installation_contract_root_has_no_app_fallback(
+def test_a_runtime_without_a_control_database_has_no_contract(
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
     sample_jsonl_file: Path,
 ) -> None:
-    with pytest.raises(ConfigurationError, match="contracts_root"):
+    """The contract is read from control.analysis_contract; there is no file fallback."""
+    with pytest.raises(ConfigurationError, match="control database"):
         build_request(
             sample_source_cfg,
             sample_analysis_cfg,

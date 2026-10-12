@@ -313,7 +313,7 @@ def run_analysis(
             analysis_name=request.analysis_name,
             input_file=str(request.file_path),
             input_hash=request.input_hash,
-            contract_path=str(request.contract_path),
+            contract_name=request.contract.name,
             contract_hash=request.contract_hash,
             schema_hash=request.schema_hash,
             model_profile=request.llm_profile_name,
@@ -355,9 +355,10 @@ def run_analysis(
             provider_package = build_package(
                 analysis={"name": request.analysis_name},
                 contract=LlmPackageContract(
-                    path=str(request.contract_path),
+                    path="",
+                    name=request.contract.name,
                     hash=request.contract_hash,
-                    content=read_text_file(request.contract_path),
+                    content=request.contract.base.text,
                 ),
                 inputs=analysis_inputs,
                 execution_context={
@@ -454,7 +455,7 @@ def build_payload(
     Parameters
     ----------
     ctx : Any
-        Application context — used to resolve ``contracts_root``.
+        Application context — its ``shared_control`` reads the contract.
     analysis_cfg : Any
         Analysis config Namespace (from ctx.analysis_configs).
     file_path : Path
@@ -465,26 +466,16 @@ def build_payload(
     dict[str, Any]
         Keys: analysis_name, data_file, rows_sampled, content.
     """
-    from rey_lib.analysis import load_analysis_contract  # noqa: PLC0415
+    from rey_lib.analysis import analysis_contract  # noqa: PLC0415
     from rey_lib.analysis import prepare  # noqa: PLC0415
 
-    # Resolve contract path the same way build_request does.
-    contracts_root_value = getattr(ctx, "contracts_root", None)
-    if not contracts_root_value:
+    # The contract by its name, as build_request reads it (backlog 903).
+    contract_name = getattr(analysis_cfg, "contract", "")
+    if not contract_name:
         raise ConfigurationError(
-            "Rey Analyzer requires installation-owned 'contracts_root'; "
-            "application-relative contract fallback is prohibited."
+            f"analysis_config '{analysis_cfg.name}' names no contract."
         )
-    contracts_root = Path(str(contracts_root_value)).expanduser().resolve()
-    contract_rel = getattr(analysis_cfg, "contract", "")
-    if not contract_rel:
-        raise ConfigurationError(
-            f"analysis_config '{analysis_cfg.name}' has no contract path."
-        )
-    p = Path(contract_rel)
-    contract_path = p.resolve() if p.is_absolute() else (contracts_root / contract_rel).resolve()
-
-    contract = load_analysis_contract(contract_path)
+    contract = analysis_contract(getattr(ctx, "shared_control", None), contract_name)
 
     # Infer input type from file extension — mirrors _build_data_source logic.
     suffix = file_path.suffix.lower()
@@ -579,7 +570,7 @@ def _build_analyzer(
     _payload_log = getattr(_eval, "payload_log_path", None) if _eval else None
     _run_log = getattr(_eval, "run_log_path", None) if _eval else None
     return Analyzer(
-        contract_path     = request.contract_path,
+        contract          = request.contract,
         provider          = llm_profile.provider,
         model             = llm_profile.model,
         # Built for this one analysis, so the key is read here and lives only

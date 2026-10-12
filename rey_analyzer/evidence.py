@@ -26,7 +26,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from rey_lib.files import read_text_file
 from rey_lib.analysis.package import (
     LlmPackageContract,
     LlmPackageInput,
@@ -70,21 +69,15 @@ def build_analysis_package(
         The canonical package (analysis / contract / inputs / execution_context).
     """
     analysis_name = str(getattr(request, "analysis_name", "") or "")
-    # The contract content is read through the shared file boundary (also recording
-    # the read as file evidence). The authoritative identity is the already-resolved
-    # request.contract_hash; content is best-effort and never re-resolved.
-    contract_content = ""
-    contract_path = str(getattr(request, "contract_path", "") or "")
-    if contract_path:
-        try:
-            contract_content = read_text_file(contract_path)
-        except OSError as exc:  # pragma: no cover - evidence never masks execution
-            _logger.warning("LLM contract content unavailable for evidence: %s", exc)
-
+    # The contract is the one the request already read from
+    # control.analysis_contract (backlog 903): its name, hash and complete text
+    # are evidence as they stand -- nothing is re-read or re-resolved.
+    resolved = getattr(request, "contract", None)
     contract = LlmPackageContract(
-        path=contract_path,
+        path="",
+        name=str(getattr(resolved, "name", "") or ""),
         hash=str(getattr(request, "contract_hash", "") or ""),
-        content=contract_content,
+        content=str(getattr(getattr(resolved, "base", None), "text", "") or ""),
     )
 
     if inputs is None:
@@ -113,13 +106,9 @@ def build_analysis_package(
     # reference loader (existing path-token resolver + approved text loader).
     from rey_lib.logs.llm_package import load_contract_references
 
-    declared_references = None
-    if contract_path:
-        try:
-            from rey_lib.analysis.contract import load as _load_contract
-            declared_references = _load_contract(contract_path).raw_frontmatter.get("references")
-        except Exception as exc:  # pragma: no cover - evidence never masks execution
-            _logger.warning("Contract references unavailable for evidence: %s", exc)
+    declared_references = (
+        getattr(getattr(resolved, "base", None), "raw_frontmatter", {}) or {}
+    ).get("references")
 
     return build_package(
         analysis={"name": analysis_name, "run_id": execution_context["run_id"]},
@@ -171,7 +160,7 @@ def emit_llm_evidence(
         log_run_record(run_log,
             "LLM_CONTRACT",
             record_group="results",
-            contract_path=package["contract"]["path"],
+            contract_name=package["contract"]["name"],
             **correlation,
         )
 

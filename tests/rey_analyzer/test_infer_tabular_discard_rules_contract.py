@@ -1,22 +1,43 @@
+"""infer_tabular_discard_rules v02: the contract carries its own output schema.
+
+The fixture is the text stored in control.analysis_contract for local and
+wolff_popper (backlog 903) -- its md5 is the stored row's, so the fixture cannot
+drift from the database. The schema is the contract's embedded output_schema;
+there is no sidecar.
+"""
+
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import jsonschema
 import pytest
 
-from rey_lib.analysis import load_analysis_contract
-from rey_lib.analysis.contract import load_sidecar_schema as _load_sidecar_schema
+from rey_lib.ai import AI, AIProfile, AIRegistry, AISettings, EchoProvider
+from rey_lib.analysis import parse_analysis_contract
+from rey_lib.analysis.api import RunRequest
+from rey_lib.analysis.execution import run
+from rey_lib.analysis.records import STATUS_SUCCESS
+from rey_lib.encryption import sha256_text
+
+from rey_analyzer.requests import _compute_request_id, build_request
+
+FIXTURE = Path(__file__).with_name("fixtures") / "infer_tabular_discard_rules.v02.md"
+#: md5 of the v02 text stored in control.analysis_contract (both installations).
+STORED_V02_MD5 = "21c4664c85059bd36ad25143832dca66"
+#: The v01 era: sha256 of the v01 contract file and of its v01.schema.json sidecar.
+V01_CONTRACT_SHA256 = "57a59542a99890a51e6f9255fdff067d9d1675d4133198d5a3591e3eb56211c2"
+V01_SIDECAR_SHA256 = "bc3dcd5c051dfa29700e636a0740a92272fb035d0d951cb2b3c60a6b1c7a5d05"
 
 
-CONTRACT = (
-    Path(__file__).parents[2]
-    / "contracts"
-    / "infer_tabular_discard_rules"
-    / "v01.md"
-)
+def _v02_text() -> str:
+    text = FIXTURE.read_text(encoding="utf-8")
+    assert hashlib.md5(text.encode("utf-8")).hexdigest() == STORED_V02_MD5
+    return text
 
 
 def _evidence(line: int = 1) -> list[dict[str, object]]:
@@ -87,11 +108,17 @@ def _candidate() -> dict[str, object]:
 
 
 @pytest.fixture(scope="module")
-def schema() -> dict[str, object]:
-    contract = load_analysis_contract(CONTRACT)
-    assert contract.name == "infer_tabular_discard_rules"
-    assert contract.spec.output_format == "json"
-    loaded = _load_sidecar_schema(CONTRACT)
+def contract():
+    parsed = parse_analysis_contract(_v02_text(), "markdown")
+    assert parsed.name == "infer_tabular_discard_rules"
+    assert parsed.version == "02"
+    assert parsed.spec.output_format == "json"
+    return parsed
+
+
+@pytest.fixture(scope="module")
+def schema(contract) -> dict[str, object]:
+    loaded = contract.spec.output_schema
     assert loaded is not None
     jsonschema.Draft7Validator.check_schema(loaded)
     return loaded
@@ -173,6 +200,87 @@ def test_schema_excludes_durable_rule_set_fields(
             jsonschema.validate(candidate, schema)
 
 
-def test_sidecar_is_valid_json() -> None:
-    parsed = json.loads(CONTRACT.with_name("v01.schema.json").read_text())
-    assert parsed["$id"].endswith("/v01")
+def test_the_embedded_schema_is_the_former_sidecar(schema: dict[str, object]) -> None:
+    assert schema["$id"].endswith("/v01")
+    assert schema["$schema"] == "http://json-schema.org/draft-07/schema#"
+
+
+# ---------------------------------------------------------------------------
+# The four intended behaviour changes of v02 (backlog 903)
+# ---------------------------------------------------------------------------
+
+def _runtime(reply: str, value: object = None) -> AI:
+    """One AI runtime answering with a fixed reply."""
+    return AI(
+        registry=AIRegistry(
+            profiles=(AIProfile(id="mock", provider="echo", model="m"),),
+            providers=(EchoProvider(reply_with=reply, value=value),),
+        ),
+        settings=AISettings(profile_id="mock"),
+    )
+
+
+def _stage(contract) -> RunRequest:
+    return RunRequest(
+        pipeline_id="rey_analyzer", stage_id=contract.name,
+        contract=contract.base, input_data="{}", profile_id="mock",
+        output_schema=contract.spec.output_schema,
+    )
+
+
+def test_change_1_runtime_output_validation_now_occurs(contract) -> None:
+    """The embedded schema is enforced: a strict candidate passes, others fail."""
+    accepted = run(_stage(contract), _runtime(json.dumps(_candidate()), value=_candidate()))
+    assert accepted.status == STATUS_SUCCESS
+
+    prose = run(_stage(contract), _runtime("The file contains one table."))
+    assert prose.status != STATUS_SUCCESS
+
+    ambiguous = _candidate()
+    ambiguous["unresolved_ambiguities"] = ["Two boundary rows are plausible."]
+    refused = run(_stage(contract), _runtime(json.dumps(ambiguous), value=ambiguous))
+    assert refused.status != STATUS_SUCCESS
+
+
+def test_change_2_contract_hash_is_the_v02_text(contract) -> None:
+    assert contract.hash == sha256_text(_v02_text())
+    assert contract.hash != V01_CONTRACT_SHA256
+
+
+def test_change_3_request_id_differs_from_the_v01_era(contract, tmp_path: Path) -> None:
+    """build_request reads the contract by name; its schema hash is the embedded one."""
+    analysed = tmp_path / "file_type_0123456789abcdef.analysis.json"
+    analysed.write_text("{}", encoding="utf-8")
+    control = SimpleNamespace(
+        installation_id=1,
+        analysis_contract=lambda name: {
+            "name": name, "format": "markdown", "contract_text": _v02_text(),
+        },
+    )
+    analysis_cfg = SimpleNamespace(
+        name="infer_tabular_discard_rules", contract="infer_tabular_discard_rules",
+        llm_execution_profile="primary", idempotency_mode="reuse_success",
+        requires_approval=False,
+    )
+
+    request = build_request(
+        SimpleNamespace(name="file_operator"), analysis_cfg, analysed,
+        ctx=SimpleNamespace(shared_control=control),
+    )
+
+    embedded = sha256_text(json.dumps(contract.spec.output_schema, sort_keys=True))
+    assert request.schema_hash == embedded
+    assert request.contract_hash == contract.hash
+    assert request.request_id == _compute_request_id(request.input_hash, contract.hash, embedded)
+    assert request.request_id != _compute_request_id(
+        request.input_hash, V01_CONTRACT_SHA256, V01_SIDECAR_SHA256,
+    )
+
+
+def test_change_4_execution_schema_hash_is_the_enforced_schema(contract) -> None:
+    response = run(_stage(contract), _runtime(json.dumps(_candidate()), value=_candidate()))
+
+    expected = sha256_text(json.dumps(contract.spec.output_schema, sort_keys=True))
+    assert response.record is not None
+    assert response.record.schema_hash == expected
+    assert response.record.schema_hash != sha256_text("")

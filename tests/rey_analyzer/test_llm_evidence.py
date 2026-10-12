@@ -13,12 +13,12 @@ from types import SimpleNamespace
 
 import rey_analyzer.evidence as evidence
 from rey_analyzer.evidence import build_analysis_package, emit_llm_evidence
-from rey_lib.analysis import LlmPackageInput
+from rey_lib.analysis import LlmPackageInput, parse_analysis_contract
+
+_CONTRACT_TEXT = "---\nname: c\nversion: 1\neffective_date: 2026-10-12\n---\nRULES\n"
 
 
 def _request(tmp_path: Path) -> SimpleNamespace:
-    contract = tmp_path / "contract.md"
-    contract.write_text("---\nname: c\nversion: 1\n---\nRULES\n", encoding="utf-8")
     source = tmp_path / "profile.json"
     source.write_text('{"columns": ["a"]}', encoding="utf-8")
     return SimpleNamespace(
@@ -27,7 +27,7 @@ def _request(tmp_path: Path) -> SimpleNamespace:
         request_id="req-123",
         file_path=source,
         input_hash="inhash",
-        contract_path=contract,
+        contract=parse_analysis_contract(_CONTRACT_TEXT, "markdown"),
         contract_hash="conhash",
     )
 
@@ -62,7 +62,8 @@ def test_package_contract_uses_already_resolved_evidence(tmp_path: Path) -> None
     request = _request(tmp_path)
     package = build_analysis_package(_ctx(), request, _result())
 
-    assert package["contract"]["path"] == str(request.contract_path)
+    assert package["contract"]["name"] == "c"
+    assert package["contract"]["path"] == ""          # a stored contract names no file
     assert package["contract"]["hash"] == "conhash"      # the request's hash, not re-derived
     assert "RULES" in package["contract"]["content"]
     # Contract is never an input.
@@ -111,7 +112,7 @@ def test_emits_contract_and_context_with_correlation_identifiers(run_log, tmp_pa
 
     # LLM_CONTRACT: exact resolved contract identity.
     contract = by_type["LLM_CONTRACT"]
-    assert contract["contract_path"] == str(request.contract_path)
+    assert contract["contract_name"] == "c"
     assert contract["contract_hash"] == "conhash"
 
     # Both carry the correlation spine that appears on the ExecutionRecord:
