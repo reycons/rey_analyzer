@@ -234,23 +234,36 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
                                               'value_type': 'string'}]}]}
 
 
-#: The operations a workflow may name, and what each is configured with.
+#: The operations a workflow may name, each with its settings contract (backlog
+#: 939): a JSON Schema 2020-12 definition of the settings its reader takes, and
+#: the starter settings a new instance copies.
 #:
-#: ``source`` is a data-source name. Publication says the setting exists and is
-#: required; which data source that name identifies, and which analysis config
-#: that source in turn names, stay the implementation's answers.
+#: ``source`` is a reference: the name of a data source declared in the
+#: installation. Which data source that is, and which analysis config it names
+#: in turn, stay the implementation's answers (rey_analyzer/workflow.py
+#: _process_analysis -> _resolve_source -> _resolve_analysis).
 WORKFLOW_OPERATIONS: list[dict[str, Any]] = [
     {
         "name": "analysis",
         "description": "Run one named analyzer data source through its analysis config.",
-        "parameters": [
-            {
-                "name": "source",
-                "required": True,
-                "value_type": "string",
-                "description": "Data-source name declared under data_sources.",
+        "contract_definition": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "description": "Run one named analyzer data source through its analysis config.",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "description": (
+                        "Data source to analyse, declared under the installation's "
+                        "data_sources. Its analysis_config names the analysis it runs."
+                    ),
+                    "x-rey-reference": {"collection": "data_sources"},
+                },
             },
-        ],
+            "required": ["source"],
+            "additionalProperties": False,
+        },
+        "contract_sample": {"source": ""},
     },
 ]
 
