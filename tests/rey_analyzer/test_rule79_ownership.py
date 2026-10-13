@@ -106,9 +106,7 @@ def test_a_failed_workflow_is_status_and_returns_nonzero(
             patch.object(workflow, "coordinate_workflow", return_value=failed_run), \
             patch.object(workflow, "build_process_registry", return_value={}), \
             caplog.at_level(logging.WARNING):
-        assert workflow.run_process_workflow(
-            SimpleNamespace(installation=SimpleNamespace(name="test")), "wf",
-        ) == 1
+        assert workflow.run_process_workflow(SimpleNamespace(), "wf") == 1
 
     assert _errors(caplog) == []
     (warning,) = [r for r in caplog.records if r.levelno == logging.WARNING]
