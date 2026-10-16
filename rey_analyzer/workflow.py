@@ -55,9 +55,13 @@ def build_process_registry() -> dict[str, Any]:
     engine call; which processes exist, and how many name one of these, is the
     workflow's declaration. Every key here is published in this application's
     registration, and the engine refuses a workflow naming anything else.
+
+    Each implementation takes the canonical WorkflowStep as an optional last
+    argument (Run.execute passes it); the legacy coordinator passes none.
     """
-    def analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext) -> StepResult:
-        return _process_analysis(ctx, config, run)
+    def analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext,
+                 step: Any = None) -> StepResult:
+        return _process_analysis(ctx, run_log, config, run)
 
     return {"analysis": analysis}
 

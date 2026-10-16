@@ -274,6 +274,9 @@ def get_registration() -> dict[str, Any]:
     Returns:
         Identity, entry point and published capability.
     """
+    # Deferred: rey_analyzer.workflow imports from this module.
+    from rey_analyzer.workflow import build_process_registry  # noqa: PLC0415
+
     return {
         "name": APPLICATION_NAME,
         # The mark this application is known by, published the way its CLI and
@@ -286,4 +289,7 @@ def get_registration() -> dict[str, Any]:
         "entry_point": "main.py",
         "cli": CLI,
         "workflow_operations": WORKFLOW_OPERATIONS,
+        # The approved implementation for each published operation, as the
+        # finished mapping (backlog 963): what a canonical workflow step binds to.
+        "approved_implementations": build_process_registry(),
     }
