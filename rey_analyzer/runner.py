@@ -17,7 +17,6 @@ run_analysis   Process a single file through a single analysis config.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,6 @@ from rey_lib.files.file_utils import (
     read_text_file,
 )
 from rey_lib.analysis import Analyzer
-from rey_lib.analysis import LlmPackageContract, LlmPackageInput, build_package
 from rey_lib.logs import (
     AppLogger,
     log_input_discovered,
@@ -324,54 +322,6 @@ def run_analysis(
         source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
         analysis_inputs = None
 
-        file_set_cfg = analyzer.contract.base.raw_frontmatter.get("file_set") or {}
-        required_values = list(file_set_cfg.get("required_values") or [])
-        if required_values:
-            pipeline_name = str(getattr(ctx, "pipeline_name", "") or "")
-            pipeline_cfg = find_in_ctx(ctx, "pipelines", pipeline_name)
-            tokens = getattr(pipeline_cfg, "tokens", None) if pipeline_cfg is not None else None
-            missing = [name for name in required_values if not hasattr(tokens, name)]
-            if missing:
-                raise ConfigurationError(
-                    "Analysis requires resolved pipeline file-set values: "
-                    + ", ".join(missing)
-                )
-
-            source_data = source.extract(max_extract=10_000)
-            file_set_values = {name: getattr(tokens, name) for name in required_values}
-            analysis_inputs = [
-                LlmPackageInput(
-                    source_path=str(processing),
-                    content=source_data.raw_text,
-                    input_hash=request.input_hash,
-                    name="analysis_input",
-                ),
-                LlmPackageInput(
-                    source_path="",
-                    content=file_set_values,
-                    name="file_set",
-                ),
-            ]
-            provider_package = build_package(
-                analysis={"name": request.analysis_name},
-                contract=LlmPackageContract(
-                    path="",
-                    name=request.contract.name,
-                    hash=request.contract_hash,
-                    content=request.contract.base.text,
-                ),
-                inputs=analysis_inputs,
-                execution_context={
-                    "app": "rey_analyzer",
-                    "analysis_name": request.analysis_name,
-                    "source_name": request.source_name,
-                    "pipeline": pipeline_name,
-                },
-            )
-            source = TextDataSource(
-                text=json.dumps(provider_package, ensure_ascii=False),
-                ref=processing.name,
-            )
         result      = analyzer.analyze(source, analysis_id=request.request_id)
 
         # Emit per-analysis LLM evidence (LLM_CONTRACT + LLM_CONTEXT) from the

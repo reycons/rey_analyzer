@@ -50,40 +50,7 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
                                  'value_type': 'KEY=VALUE',
                                  'description': 'Override an environment '
                                                 'variable for this run.'},
-                             {   'name': 'pipeline-name',
-                                 'required': False,
-                                 'value_type': 'string',
-                                 'description': 'Pipeline name supplied by '
-                                                'pipeline_coordinator.'},
-                             {   'name': 'pipeline-run-id',
-                                 'required': False,
-                                 'value_type': 'string',
-                                 'description': 'Unique pipeline run '
-                                                'identifier supplied by '
-                                                'pipeline_coordinator.'},
-                             {   'name': 'pipeline-step-name',
-                                 'required': False,
-                                 'value_type': 'string',
-                                 'description': 'Pipeline step name '
-                                                'supplied by '
-                                                'pipeline_coordinator.'},
-                             {   'name': 'pipeline-step-id',
-                                 'required': False,
-                                 'value_type': 'string',
-                                 'description': 'Optional unique pipeline '
-                                                'step identifier.'},
-                             {   'name': 'log-file',
-                                 'required': False,
-                                 'value_type': 'path',
-                                 'description': 'Shared pipeline JSONL log '
-                                                'path.'},
-                             {   'name': 'ctx-file',
-                                 'required': False,
-                                 'value_type': 'path',
-                                 'description': 'Pipeline step ctx '
-                                                'snapshot (JSON); mutually '
-                                                'exclusive with '
-                                                'config-path.'}],
+                             ],
     'commands': [   {   'name': 'run',
                         'description': 'Process all enabled data sources.',
                         'parameters': []},

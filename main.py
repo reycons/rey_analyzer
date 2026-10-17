@@ -78,12 +78,10 @@ def main() -> int:
             )
 
         finally:
-            # Top-level owner (standalone run, not a pipeline step) explicitly creates the
-            # RESULTS_SUMMARY after its final RUN_COMPLETE — on success or failure. Pipeline
-            # steps (invoked with --ctx-file) leave finalization to pipeline_coordinator
+            # The top-level owner explicitly creates the RESULTS_SUMMARY after its
+            # final RUN_COMPLETE — on success or failure
             # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
-            if not getattr(args, "ctx_file", None):
-                finalize_run_log(run_log, ai=getattr(ctx, "shared_ai", None))
+            finalize_run_log(run_log, ai=getattr(ctx, "shared_ai", None))
 
 
 def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> int:
