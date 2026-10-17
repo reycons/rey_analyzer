@@ -57,16 +57,17 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
                       step: Any) -> StepResult:
     """Run one named analyzer source. Calls the existing run_source unchanged.
 
-    ``source`` is the step-config data-source name. The data source is
-    workflow-scoped (backlog 1032): the step's own Workflow holds it, hydrated
-    with the Workflow's paths. Its config names its analysis config. A non-zero
+    ``source`` is the step-config data-source name. The data source is part of
+    the step's process's governed configuration (backlogs 1032, 1043): the
+    step's own WorkflowProcess holds it, hydrated with the workflow's paths. Its
+    config names its analysis config. A non-zero
     failed count fails the step (fail-closed).
     """
     source_name = str(_get(config, "source", "") or "")
     if not source_name:
         raise AnalyzerError("workflow 'analysis' step is missing required config 'source'.")
 
-    source_cfg = step.process.workflow.data_source(source_name)
+    source_cfg = step.process.data_source(source_name)
     analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
     success, failed, pending = run_source(ctx, run_log,
         source_cfg,

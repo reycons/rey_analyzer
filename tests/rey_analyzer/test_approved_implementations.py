@@ -54,14 +54,14 @@ def test_analysis_hands_its_handler_every_argument_in_order(
     assert seen == [(ctx, run_log, config, run, step)]
 
 
-def test_analysis_takes_its_data_source_from_the_steps_workflow(
+def test_analysis_takes_its_data_source_from_the_steps_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The data source is workflow-scoped (#1032): asked of the Workflow, not of ctx."""
+    """The data source is the process's configuration (#1043): asked of it, not of ctx."""
     asked: list[str] = []
     source = SimpleNamespace(name="proposals", analysis_config="infer")
-    owner = SimpleNamespace(data_source=lambda name: asked.append(name) or source)
-    step = SimpleNamespace(process=SimpleNamespace(workflow=owner))
+    process = SimpleNamespace(data_source=lambda name: asked.append(name) or source)
+    step = SimpleNamespace(process=process)
     received: list[Any] = []
     monkeypatch.setattr(workflow, "_resolve_analysis", lambda _ctx, name: f"analysis:{name}")
     monkeypatch.setattr(workflow, "run_source", lambda _ctx, _log, source_cfg, analysis_cfg,

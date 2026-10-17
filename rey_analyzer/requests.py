@@ -102,7 +102,7 @@ def build_request(
     Parameters
     ----------
     source_cfg : Any
-        Data source config Namespace (the step's Workflow's data source).
+        Data source config Namespace (the step's WorkflowProcess's data source).
     analysis_cfg : Any
         Analysis config Namespace (from ctx.analysis_configs).
     file_path : Path

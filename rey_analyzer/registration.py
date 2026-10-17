@@ -78,10 +78,11 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
 #: 939): a JSON Schema 2020-12 definition of the settings its reader takes, and
 #: the starter settings a new instance copies.
 #:
-#: ``source`` is a reference: the name of a data source the step's own Workflow
-#: declares (backlog 1032). Which data source that is, and which analysis config
-#: it names in turn, stay the implementation's answers (rey_analyzer/workflow.py
-#: _process_analysis -> Workflow.data_source -> _resolve_analysis).
+#: ``source`` is a reference: the name of a data source the step's own
+#: WorkflowProcess declares in its configuration (backlogs 1032, 1043). Which data
+#: source that is, and which analysis config it names in turn, stay the
+#: implementation's answers (rey_analyzer/workflow.py _process_analysis ->
+#: WorkflowProcess.data_source -> _resolve_analysis).
 WORKFLOW_OPERATIONS: list[dict[str, Any]] = [
     {
         "name": "analysis",
@@ -94,7 +95,7 @@ WORKFLOW_OPERATIONS: list[dict[str, Any]] = [
                 "source": {
                     "type": "string",
                     "description": (
-                        "Data source to analyse, declared in this workflow's "
+                        "Data source to analyse, declared in this process's "
                         "data_sources. Its analysis_config names the analysis it runs."
                     ),
                 },
