@@ -27,13 +27,14 @@ def test_every_published_operation_has_an_approved_implementation() -> None:
     assert sorted(approved) == sorted(published)
 
 
-def test_each_implementation_takes_the_canonical_step_and_the_legacy_call() -> None:
+def test_each_implementation_takes_the_canonical_step() -> None:
     # Run.execute calls implementation(ctx, run_log, settings, run, step); the
-    # legacy coordinator calls it without the step.
+    # legacy coordinator that called it without the step is retired (#1011).
     for name, implementation in get_registration()["approved_implementations"].items():
         parameters = list(inspect.signature(implementation).parameters.values())
         assert len(parameters) == 5, name
-        assert parameters[-1].name == "step" and parameters[-1].default is None, name
+        assert parameters[-1].name == "step", name
+        assert parameters[-1].default is inspect.Parameter.empty, name
 
 
 def test_analysis_hands_its_handler_every_argument_in_order(
@@ -43,10 +44,33 @@ def test_analysis_hands_its_handler_every_argument_in_order(
     seen: list[Any] = []
     monkeypatch.setattr(workflow, "_process_analysis",
                         lambda *args: seen.append(args) or "result")
-    ctx, run_log, config, run = object(), object(), {"source": "s"}, SimpleNamespace()
+    ctx, run_log, config, run, step = (object(), object(), {"source": "s"},
+                                       SimpleNamespace(), object())
 
     answer = get_registration()["approved_implementations"]["analysis"](
-        ctx, run_log, config, run, None)
+        ctx, run_log, config, run, step)
 
     assert answer == "result"
-    assert seen == [(ctx, run_log, config, run)]
+    assert seen == [(ctx, run_log, config, run, step)]
+
+
+def test_analysis_takes_its_data_source_from_the_steps_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The data source is workflow-scoped (#1032): asked of the Workflow, not of ctx."""
+    asked: list[str] = []
+    source = SimpleNamespace(name="proposals", analysis_config="infer")
+    owner = SimpleNamespace(data_source=lambda name: asked.append(name) or source)
+    step = SimpleNamespace(process=SimpleNamespace(workflow=owner))
+    received: list[Any] = []
+    monkeypatch.setattr(workflow, "_resolve_analysis", lambda _ctx, name: f"analysis:{name}")
+    monkeypatch.setattr(workflow, "run_source", lambda _ctx, _log, source_cfg, analysis_cfg,
+                        **_kw: received.append((source_cfg, analysis_cfg)) or (1, 0, 0))
+    ctx = SimpleNamespace()  # no data_sources: nothing is read from the context
+
+    result = get_registration()["approved_implementations"]["analysis"](
+        ctx, object(), {"source": "proposals"}, SimpleNamespace(metadata={}), step)
+
+    assert asked == ["proposals"]
+    assert received == [(source, "analysis:infer")]
+    assert result.status == "ok"

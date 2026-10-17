@@ -1,17 +1,14 @@
 """
 rey_analyzer — entry point.
 
-Configurable assembly-line application for contract-driven LLM analysis.
-Consumes files from configured inbox folders, runs them through analysis
-contracts via rey_lib.analysis, writes result artifacts, and moves files to
-final folders.
+Contract-driven LLM analysis runs as a governed Workflow step (the ``analysis``
+operation, rey_analyzer.workflow); its data source is the Workflow's (backlog
+1032). The run, run-source, submit-file, analyze-file and build-payload commands
+that resolved a data source from the context are retired. This entry point keeps
+the review commands over persisted run records.
 
 Usage
 -----
-    python main.py --config-path /path/to/configs/v01/config.yaml run
-    python main.py --config-path /path/to/configs/v01/config.yaml run-source rey_loader_logs
-    python main.py --config-path /path/to/configs/v01/config.yaml submit-file --source rey_loader_logs --file /path/file.jsonl
-    python main.py --config-path /path/to/configs/v01/config.yaml analyze-file --source rey_loader_logs --file /path/file.jsonl
     python main.py --config-path /path/to/configs/v01/config.yaml status --run-id <run_id>
     python main.py --config-path /path/to/configs/v01/config.yaml approve --run-id <run_id>
     python main.py --config-path /path/to/configs/v01/config.yaml reject --run-id <run_id>
@@ -29,7 +26,6 @@ from rey_lib.config.cli import preparse_config_args
 preparse_config_args()
 
 from rey_lib.config.cli import add_config_args, apply_env_overrides, build_ctx_from_args
-from rey_lib.config.ctx import find_in_ctx
 from rey_lib.config.bootstrap import app_runtime
 from rey_lib.logs import (
     AppLogger,
@@ -37,8 +33,8 @@ from rey_lib.logs import (
 from rey_lib.run_lifecycle import run_app_operation
 from rey_lib.logs import finalize_run_log
 
-from rey_analyzer.error_utils import AnalysisError, ConfigurationError
-from rey_analyzer.runner import build_payload, run_all, run_analysis, run_source
+from rey_analyzer.error_utils import ConfigurationError
+
 
 __all__: list[str] = []
 
@@ -86,56 +82,7 @@ def main() -> int:
 
 def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> int:
     """Execute the selected analyzer command body."""
-    if args.command == "run":
-        success, failed, pending = run_all(ctx, run_log)
-        log.info(
-            "run complete: success=%d failed=%d pending=%d",
-            success, failed, pending,
-        )
-        if failed:
-            # The operation fails: raised, reported once at the boundary (rule 79).
-            raise AnalysisError(f"run failed: {failed} file(s) failed")
-
-    elif args.command == "run-source":
-        source_cfg   = _resolve_source(ctx, args.source)
-        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-        success, failed, pending = run_source(ctx, run_log, source_cfg, analysis_cfg)
-        log.info(
-            "run-source complete: success=%d failed=%d pending=%d",
-            success, failed, pending,
-        )
-        if failed:
-            # The operation fails: raised, reported once at the boundary (rule 79).
-            raise AnalysisError(f"run-source failed: {failed} file(s) failed")
-
-    elif args.command == "submit-file":
-        source_cfg   = _resolve_source(ctx, args.source)
-        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-        file_path    = Path(args.file).expanduser().resolve()
-        run_log.set_nest_level("next")
-        run_log.set_nest_level("sibling")
-        status       = run_analysis(ctx, run_log, source_cfg, analysis_cfg, file_path)
-        log.info("submit-file complete: status=%s", status)
-        if status == "failed":
-            return 1
-
-    elif args.command == "analyze-file":
-        # analyze-file runs the analysis without moving the file.
-        source_cfg   = _resolve_source(ctx, args.source)
-        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-        file_path    = Path(args.file).expanduser().resolve()
-        run_log.set_nest_level("next")
-        run_log.set_nest_level("sibling")
-        status       = run_analysis(ctx, run_log, source_cfg, analysis_cfg, file_path,
-        )
-        log.info("analyze-file complete: status=%s", status)
-        if status == "failed":
-            return 1
-
-    elif args.command == "build-payload":
-        _cmd_build_payload(ctx, args, log)
-
-    elif args.command == "status":
+    if args.command == "status":
         _cmd_status(ctx, args, log)
 
     elif args.command == "approve":
@@ -151,35 +98,6 @@ def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> i
 # ---------------------------------------------------------------------------
 # Command handlers
 # ---------------------------------------------------------------------------
-
-def _cmd_build_payload(ctx: Any, args: argparse.Namespace, log: Any) -> None:
-    """Build and print the LLM payload as JSON without calling the API."""
-    import json  # noqa: PLC0415
-    from rey_lib.files.file_utils import discover_inbox_files  # noqa: PLC0415
-
-    if args.source:
-        source_cfg   = _resolve_source(ctx, args.source)
-        analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
-        files        = discover_inbox_files(source_cfg)
-        if not files:
-            raise ConfigurationError(
-                f"No files in inbox for source '{args.source}'. "
-                f"Cannot build payload without input data."
-            )
-        file_path = files[0]
-        log.info("build-payload: using first inbox file '%s'", file_path.name)
-    else:
-        analysis_cfg = _resolve_analysis(ctx, args.analysis)
-        file_path    = Path(args.file).expanduser().resolve()
-
-    result = build_payload(ctx, analysis_cfg, file_path)
-    log.info(
-        "build-payload complete: analysis=%s rows=%d",
-        result["analysis_name"],
-        result["rows_sampled"],
-    )
-    log.info("%s", json.dumps(result, ensure_ascii=False))
-
 
 def _cmd_status(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Print the status of a past run by run_id."""
@@ -225,28 +143,6 @@ def _cmd_reject(ctx: Any, args: argparse.Namespace, log: Any) -> None:
 # Config resolution helpers
 # ---------------------------------------------------------------------------
 
-def _resolve_source(ctx: Any, name: str) -> Any:
-    """Look up a data source config by name or raise ConfigurationError."""
-    cfg = find_in_ctx(ctx, "data_sources", name)
-    if cfg is None:
-        raise ConfigurationError(
-            f"data_source '{name}' not found. "
-            f"Check config/data_sources/."
-        )
-    return cfg
-
-
-def _resolve_analysis(ctx: Any, name: str) -> Any:
-    """Look up an analysis config by name or raise ConfigurationError."""
-    cfg = find_in_ctx(ctx, "analysis_configs", name)
-    if cfg is None:
-        raise ConfigurationError(
-            f"analysis_config '{name}' not found. "
-            f"Check config/app/analysis_configs.yaml."
-        )
-    return cfg
-
-
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -259,24 +155,6 @@ def _parse_args() -> argparse.Namespace:
     add_config_args(parser)
 
     sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("run", help="Process all enabled data sources.")
-
-    p_source = sub.add_parser("run-source", help="Process one named data source.")
-    p_source.add_argument("--source", required=True, dest="source", help="Data source name.")
-
-    p_submit = sub.add_parser("submit-file", help="Submit one file for analysis.")
-    p_submit.add_argument("--source", required=True, help="Data source name.")
-    p_submit.add_argument("--file",   required=True, help="Path to the file.")
-
-    p_analyze = sub.add_parser("analyze-file", help="Analyze one file without moving it.")
-    p_analyze.add_argument("--source", required=True, help="Data source name.")
-    p_analyze.add_argument("--file",   required=True, help="Path to the file.")
-
-    p_payload = sub.add_parser("build-payload", help="Build and print the LLM payload without calling the API.")
-    p_payload.add_argument("--source",   default="", help="Data source name (uses first inbox file).")
-    p_payload.add_argument("--analysis", default="", help="Analysis config name (requires --file).")
-    p_payload.add_argument("--file",     default="", help="Path to a specific data file (requires --analysis).")
 
     p_status = sub.add_parser("status", help="Print status of a past run.")
     p_status.add_argument("--run-id", required=True, dest="run_id", help="Run ID.")

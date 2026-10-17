@@ -10,8 +10,7 @@ construction beyond what is required to wire config to rey_lib.
 
 Public API
 ----------
-run_all        Process all enabled data sources.
-run_source     Process all inbox files for one named data source.
+run_source     Process all inbox files for one data source.
 run_analysis   Process a single file through a single analysis config.
 """
 
@@ -59,8 +58,6 @@ from rey_analyzer.evidence import emit_llm_evidence
 from rey_analyzer.results import build_artifact_store, write_result
 
 __all__ = [
-    "build_payload",
-    "run_all",
     "run_analysis",
     "run_source",
 ]
@@ -75,63 +72,6 @@ _TEXT_INPUT_TYPES = frozenset({
     "json_file",
     "markdown_file",
 })
-
-
-def run_all(ctx: Any, run_log) -> tuple[int, int, int]:
-    """
-    Process all enabled data sources defined in ctx.
-
-    Iterates ctx.data_sources in declaration order. Disabled sources are
-    skipped with a debug log. Failures on one source do not stop others
-    unless ctx.runtime.stop_on_error is true.
-
-    Parameters
-    ----------
-    ctx : Any
-        Application context built by build_ctx().
-
-    Returns
-    -------
-    tuple[int, int, int]
-        Total counts of (success, failed, pending_approval) files.
-    """
-    sources = getattr(ctx, "data_sources", []) or []
-    if not sources:
-        _logger.warning("No data_sources configured — nothing to process.")
-        return 0, 0, 0
-
-    stop_on_error = bool(getattr(getattr(ctx, "runtime", None), "stop_on_error", False))
-    total_success = total_failed = total_pending = 0
-
-    for source_cfg in sources:
-        if not getattr(source_cfg, "enabled", True):
-            _logger.debug("source '%s' disabled — skipping.", source_cfg.name)
-            continue
-
-        try:
-            analysis_cfg = _resolve_analysis_cfg(ctx, source_cfg.analysis_config)
-            success, failed, pending = run_source(ctx, run_log, source_cfg, analysis_cfg)
-            _logger.info(
-                "source '%s' complete: success=%d failed=%d pending=%d",
-                source_cfg.name, success, failed, pending,
-            )
-            total_success += success
-            total_failed += failed
-            total_pending += pending
-        except Exception as exc:  # noqa: BLE001
-            total_failed += 1
-            if stop_on_error:
-                # Propagated, so not reported here: the boundary reports it.
-                raise
-            # Consumed -- the next source still runs -- so reported here, and
-            # the reported AppError is the failure (rule 79).
-            error = exc if isinstance(exc, AppError) else SourceError(
-                f"source '{source_cfg.name}' failed")
-            if error is not exc:
-                error.__cause__ = exc
-            error.report(f"running source {source_cfg.name}", source=__name__)
-
-    return total_success, total_failed, total_pending
 
 
 def run_source(
@@ -391,99 +331,6 @@ def run_analysis(
         return "failed"
 
 
-def build_payload(
-    ctx:          Any,
-    analysis_cfg: Any,
-    file_path:    Path,
-) -> dict[str, Any]:
-    """Build the exact LLM payload for one analysis config and file.
-
-    Applies the same extract → prepare pipeline as run_analysis but stops
-    before calling the LLM provider. Returns a dict with the formatted
-    payload string and preparation metadata.
-
-    Parameters
-    ----------
-    ctx : Any
-        Application context — its ``shared_control`` reads the contract.
-    analysis_cfg : Any
-        Analysis config Namespace (from ctx.analysis_configs).
-    file_path : Path
-        Absolute path to the file to include in the payload.
-
-    Returns
-    -------
-    dict[str, Any]
-        Keys: analysis_name, data_file, rows_sampled, content.
-    """
-    from rey_lib.analysis import analysis_contract  # noqa: PLC0415
-    from rey_lib.analysis import prepare  # noqa: PLC0415
-
-    # The contract by its name, as build_request reads it (backlog 903).
-    contract_name = getattr(analysis_cfg, "contract", "")
-    if not contract_name:
-        raise ConfigurationError(
-            f"analysis_config '{analysis_cfg.name}' names no contract."
-        )
-    contract = analysis_contract(getattr(ctx, "shared_control", None), contract_name)
-
-    # Infer input type from file extension — mirrors _build_data_source logic.
-    suffix = file_path.suffix.lower()
-    input_type_map = {
-        ".jsonl": "jsonl_file",
-        ".json":  "json_file",
-        ".csv":   "csv_file",
-        ".xlsx":  "excel_file",
-        ".xls":   "excel_file",
-    }
-    input_type = input_type_map.get(suffix, "text_file")
-    source = _build_data_source(input_type, file_path, analysis_cfg)
-
-    spec = contract.spec
-    raw = source.extract(max_extract=10_000)
-    prepared = prepare(
-        raw,
-        allowed_columns  = spec.allowed_columns,
-        required_filters = spec.required_filters,
-        max_rows         = spec.max_rows,
-        sampling_method  = spec.sampling_method,
-        sampling_seed    = spec.sampling_seed,
-        redaction_rules  = spec.redaction,
-    )
-
-    _logger.info(
-        "build-payload: contract='%s' rows_sampled=%d file='%s'",
-        contract.name,
-        prepared.profile.rows_sampled,
-        file_path.name,
-    )
-
-    content = "\n".join([
-        f"# {contract.name}",
-        "",
-        "## System Prompt (Contract)",
-        "",
-        contract.base.body.strip(),
-        "",
-        "---",
-        "",
-        f"## Input Data — {file_path.name} ({prepared.profile.rows_sampled} rows)",
-        "",
-        prepared.rendered_text,
-    ])
-
-    return {
-        "analysis_name": analysis_cfg.name,
-        "data_file":     file_path.name,
-        "rows_sampled":  prepared.profile.rows_sampled,
-        "content":       content,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Private factories
-# ---------------------------------------------------------------------------
-
 # Profile keys forwarded to the provider as options (endpoint, timeout, and
 # capability flags). Only keys present on the profile are forwarded.
 _PROVIDER_OPTION_KEYS = (
@@ -589,17 +436,6 @@ def _build_data_source(
         f"Supported: text_file, jsonl_file, json_file, markdown_file, "
         f"csv_file, excel_file."
     )
-
-
-def _resolve_analysis_cfg(ctx: Any, name: str) -> Any:
-    """Look up a named analysis config in ctx.analysis_configs."""
-    cfg = find_in_ctx(ctx, "analysis_configs", name)
-    if cfg is None:
-        raise ConfigurationError(
-            f"analysis_config '{name}' not found. "
-            f"Check config/app/analysis_configs.yaml."
-        )
-    return cfg
 
 
 def _resolve_llm_profile(ctx: Any, name: str) -> Any:

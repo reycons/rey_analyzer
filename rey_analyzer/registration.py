@@ -51,98 +51,7 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
                                  'description': 'Override an environment '
                                                 'variable for this run.'},
                              ],
-    'commands': [   {   'name': 'run',
-                        'description': 'Process all enabled data sources.',
-                        'parameters': []},
-                    {   'name': 'run-source',
-                        'description': 'Process one named data source.',
-                        'parameters': [   {   'name': 'source',
-                                              'required': True,
-                                              'value_type': 'choice',
-                                              'possible_values': [   'file_profile_to_loader_config',
-                                                                     'fo_final_ddl',
-                                                                     'fo_profile_to_loader',
-                                                                     'fo_staging_ddl',
-                                                                     'fo_staging_view',
-                                                                     'loader_config_to_final_ddl',
-                                                                     'loader_config_to_staging_ddl',
-                                                                     'loader_config_to_staging_view',
-                                                                     'rey_loader_logs']}]},
-                    {   'name': 'submit-file',
-                        'description': 'Submit one file for analysis.',
-                        'parameters': [   {   'name': 'source',
-                                              'required': True,
-                                              'value_type': 'choice',
-                                              'possible_values': [   'file_profile_to_loader_config',
-                                                                     'fo_final_ddl',
-                                                                     'fo_profile_to_loader',
-                                                                     'fo_staging_ddl',
-                                                                     'fo_staging_view',
-                                                                     'loader_config_to_final_ddl',
-                                                                     'loader_config_to_staging_ddl',
-                                                                     'loader_config_to_staging_view',
-                                                                     'rey_loader_logs']},
-                                          {   'name': 'file',
-                                              'required': True,
-                                              'value_type': 'path'}]},
-                    {   'name': 'analyze-file',
-                        'description': 'Analyze one file without moving '
-                                       'it.',
-                        'parameters': [   {   'name': 'source',
-                                              'required': True,
-                                              'value_type': 'choice',
-                                              'possible_values': [   'file_profile_to_loader_config',
-                                                                     'fo_final_ddl',
-                                                                     'fo_profile_to_loader',
-                                                                     'fo_staging_ddl',
-                                                                     'fo_staging_view',
-                                                                     'loader_config_to_final_ddl',
-                                                                     'loader_config_to_staging_ddl',
-                                                                     'loader_config_to_staging_view',
-                                                                     'rey_loader_logs']},
-                                          {   'name': 'file',
-                                              'required': True,
-                                              'value_type': 'path'}]},
-                    {   'name': 'build-payload',
-                        'description': 'Build and print the LLM payload '
-                                       'without calling the API.',
-                        'parameters': [   {   'name': 'source',
-                                              'required': False,
-                                              'value_type': 'choice',
-                                              'possible_values': [   'file_profile_to_loader_config',
-                                                                     'fo_final_ddl',
-                                                                     'fo_profile_to_loader',
-                                                                     'fo_staging_ddl',
-                                                                     'fo_staging_view',
-                                                                     'loader_config_to_final_ddl',
-                                                                     'loader_config_to_staging_ddl',
-                                                                     'loader_config_to_staging_view',
-                                                                     'rey_loader_logs'],
-                                              'description': 'Data source '
-                                                             'name; uses '
-                                                             'the first '
-                                                             'inbox file '
-                                                             'when '
-                                                             'supplied.'},
-                                          {   'name': 'analysis',
-                                              'required': False,
-                                              'value_type': 'string',
-                                              'description': 'Analysis '
-                                                             'config name; '
-                                                             'use with '
-                                                             'file when '
-                                                             'source is '
-                                                             'omitted.'},
-                                          {   'name': 'file',
-                                              'required': False,
-                                              'value_type': 'path',
-                                              'description': 'File to '
-                                                             'build a '
-                                                             'payload for '
-                                                             'when '
-                                                             'analysis is '
-                                                             'supplied.'}]},
-                    {   'name': 'status',
+    'commands': [   {   'name': 'status',
                         'description': 'Print status of a past run.',
                         'parameters': [   {   'name': 'run-id',
                                               'required': True,
@@ -169,10 +78,10 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
 #: 939): a JSON Schema 2020-12 definition of the settings its reader takes, and
 #: the starter settings a new instance copies.
 #:
-#: ``source`` is a reference: the name of a data source declared in the
-#: installation. Which data source that is, and which analysis config it names
-#: in turn, stay the implementation's answers (rey_analyzer/workflow.py
-#: _process_analysis -> _resolve_source -> _resolve_analysis).
+#: ``source`` is a reference: the name of a data source the step's own Workflow
+#: declares (backlog 1032). Which data source that is, and which analysis config
+#: it names in turn, stay the implementation's answers (rey_analyzer/workflow.py
+#: _process_analysis -> Workflow.data_source -> _resolve_analysis).
 WORKFLOW_OPERATIONS: list[dict[str, Any]] = [
     {
         "name": "analysis",
@@ -185,10 +94,9 @@ WORKFLOW_OPERATIONS: list[dict[str, Any]] = [
                 "source": {
                     "type": "string",
                     "description": (
-                        "Data source to analyse, declared under the installation's "
+                        "Data source to analyse, declared in this workflow's "
                         "data_sources. Its analysis_config names the analysis it runs."
                     ),
-                    "x-rey-reference": {"collection": "data_sources"},
                 },
             },
             "required": ["source"],

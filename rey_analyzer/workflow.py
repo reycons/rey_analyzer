@@ -43,28 +43,30 @@ def build_process_registry() -> dict[str, Any]:
     (Run.execute passes it).
     """
     def analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext,
-                 step: Any = None) -> StepResult:
-        return _process_analysis(ctx, run_log, config, run)
+                 step: Any) -> StepResult:
+        return _process_analysis(ctx, run_log, config, run, step)
 
     return {"analysis": analysis}
 
 
 # ---------------------------------------------------------------------------
-# Process handler (coordinator signature: ctx, config, run) -> StepResult
+# Process handler (ctx, run_log, config, run, step) -> StepResult
 # ---------------------------------------------------------------------------
 
-def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext) -> StepResult:
+def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext,
+                      step: Any) -> StepResult:
     """Run one named analyzer source. Calls the existing run_source unchanged.
 
-    ``source`` is the step-config data-source name; the source's own config names
-    its analysis config, resolved exactly as the ``run-source`` command does. A
-    non-zero failed count fails the step (fail-closed), matching ``run-source``.
+    ``source`` is the step-config data-source name. The data source is
+    workflow-scoped (backlog 1032): the step's own Workflow holds it, hydrated
+    with the Workflow's paths. Its config names its analysis config. A non-zero
+    failed count fails the step (fail-closed).
     """
     source_name = str(_get(config, "source", "") or "")
     if not source_name:
         raise AnalyzerError("workflow 'analysis' step is missing required config 'source'.")
 
-    source_cfg = _resolve_source(ctx, source_name)
+    source_cfg = step.process.workflow.data_source(source_name)
     analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
     success, failed, pending = run_source(ctx, run_log,
         source_cfg,
@@ -82,18 +84,8 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
 
 
 # ---------------------------------------------------------------------------
-# Config resolution (same lookups the run-source command uses)
+# Config resolution
 # ---------------------------------------------------------------------------
-
-def _resolve_source(ctx: Any, name: str) -> Any:
-    """Look up a data source config by name or raise ConfigurationError."""
-    cfg = find_in_ctx(ctx, "data_sources", name)
-    if cfg is None:
-        raise ConfigurationError(
-            f"data_source '{name}' not found. Check config/data_sources/."
-        )
-    return cfg
-
 
 def _resolve_analysis(ctx: Any, name: str) -> Any:
     """Look up an analysis config by name or raise ConfigurationError."""

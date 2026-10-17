@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -177,21 +177,6 @@ def test_two_file_analyses_create_sibling_input_branches(run_log,
         assert validation["nest_level"] == ref["nest_level"] + 1
 
 
-def test_run_all_returns_failed_count_on_source_exception(run_log, 
-    sample_ctx: SimpleNamespace,
-    sample_source_cfg: SimpleNamespace,
-) -> None:
-    """run_all includes source-level failures in the returned counts."""
-    from rey_analyzer.runner import run_all
-
-    sample_source_cfg.analysis_config = "missing_config"
-    sample_ctx.data_sources = [sample_source_cfg]
-
-    success, failed, pending = run_all(sample_ctx, run_log)
-
-    assert (success, failed, pending) == (0, 1, 0)
-
-
 def test_run_analysis_moves_to_failed_on_exception(run_log, 
     sample_ctx: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
@@ -229,5 +214,3 @@ def test_run_analysis_moves_to_failed_on_exception(run_log,
     assert input_ref["path"] == str(file_in_inbox)
     assert validation["validation_name"] == "analysis_result"
     assert validation["status"] == "failed"
-
-
