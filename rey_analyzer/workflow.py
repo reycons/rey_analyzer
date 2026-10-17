@@ -59,8 +59,9 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
     ``source`` is the step-config data-source name. The data source is part of
     the step's process's governed configuration (backlogs 1032, 1043): the
     step's own WorkflowProcess holds it, hydrated with the workflow's paths. Its
-    config names its analysis config, which the same process holds (backlog
-    1005). A non-zero failed count fails the step (fail-closed).
+    config names its analysis config, which the same process holds, as it holds
+    the app and runtime sections the run reads (backlog 1005). A non-zero failed
+    count fails the step (fail-closed).
     """
     source_name = str(_get(config, "source", "") or "")
     if not source_name:
@@ -71,6 +72,8 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
     success, failed, pending = run_source(ctx, run_log,
         source_cfg,
         analysis_cfg,
+        app_cfg=step.process.config_section("app"),
+        runtime_cfg=step.process.config_section("runtime"),
         workflow_name=str(run.metadata.get("workflow") or ""),
     )
 

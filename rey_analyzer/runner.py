@@ -79,29 +79,34 @@ def run_source(
     source_cfg:   Any,
     analysis_cfg: Any,
     *,
+    app_cfg:      Any,
+    runtime_cfg:  Any,
     workflow_name: str = "",
 ) -> tuple[int, int, int]:
     """
     Process all inbox files for one data source.
 
     Applies per-source max_files_per_run cap (lowest of source config and
-    ctx.runtime.max_files_per_run). Files are processed in sorted order.
+    runtime_cfg.max_files_per_run). Files are processed in sorted order.
 
     Parameters
     ----------
     ctx : Any
-        Application context.
+        Application context (run context; not a configuration source).
     source_cfg : Any
         Data source config Namespace.
     analysis_cfg : Any
         Analysis config Namespace.
+    app_cfg, runtime_cfg : Any
+        The step's process configuration sections ``app`` and ``runtime``
+        (backlog 1005), as the handler takes them from its WorkflowProcess.
 
     Returns
     -------
     tuple[int, int, int]
         Counts of (success, failed, pending_approval) files.
     """
-    max_files = _max_files(ctx, source_cfg)
+    max_files = _max_files(runtime_cfg, source_cfg)
     files     = discover_inbox_files(source_cfg)[:max_files]
     pattern = str(getattr(source_cfg, "file_pattern", "*") or "*")
     inbox = str(getattr(getattr(source_cfg, "paths", None), "inbox_path", "") or "")
@@ -163,6 +168,7 @@ def run_source(
                 source_cfg,
                 analysis_cfg,
                 file_path,
+                app_cfg=app_cfg,
                 workflow_name=workflow_name,
             )
         finally:
@@ -183,6 +189,7 @@ def run_analysis(
     analysis_cfg: Any,
     file_path:    Path,
     *,
+    app_cfg:      Any,
     workflow_name: str = "",
 ) -> str:
     """
@@ -258,7 +265,7 @@ def run_analysis(
             provider=str(getattr(llm_profile, "provider", "") or ""),
             model=str(getattr(llm_profile, "model", "") or ""),
         )
-        analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile)
+        analyzer    = _build_analyzer(ctx, analysis_cfg, request, llm_profile, app_cfg)
         source      = _build_data_source(source_cfg.input_type, processing, analysis_cfg)
         analysis_inputs = None
 
@@ -360,9 +367,10 @@ def _build_analyzer(
     analysis_cfg: Any,
     request:      AnalysisRequest,
     llm_profile:  Any,
+    app_cfg:      Any,
 ) -> Analyzer:
     """Construct an Analyzer for the given request."""
-    artifact_store = build_artifact_store(ctx)
+    artifact_store = build_artifact_store(ctx, app_cfg)
     _eval = getattr(ctx, "llm_evaluation", None)
     _payload_log = getattr(_eval, "payload_log_path", None) if _eval else None
     _run_log = getattr(_eval, "run_log_path", None) if _eval else None
@@ -449,8 +457,8 @@ def _resolve_llm_profile(ctx: Any, name: str) -> Any:
     return profile
 
 
-def _max_files(ctx: Any, source_cfg: Any) -> int:
+def _max_files(runtime_cfg: Any, source_cfg: Any) -> int:
     """Return the effective per-run file cap for a data source."""
-    runtime_max = getattr(getattr(ctx, "runtime", None), "max_files_per_run", 100)
+    runtime_max = getattr(runtime_cfg, "max_files_per_run", 100)
     source_max  = getattr(source_cfg, "max_files_per_run", runtime_max)
     return min(runtime_max, source_max)

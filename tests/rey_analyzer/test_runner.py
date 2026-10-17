@@ -54,22 +54,24 @@ def test_build_data_source_text_types(tmp_path: Path) -> None:
         assert isinstance(src, TextDataSource), input_type
 
 
-def test_max_files_uses_minimum(sample_ctx: SimpleNamespace) -> None:
+def test_max_files_uses_minimum(sample_runtime_cfg: SimpleNamespace) -> None:
     """_max_files returns the lower of runtime and source caps."""
-    sample_ctx.runtime.max_files_per_run = 50
+    sample_runtime_cfg.max_files_per_run = 50
     source_cfg = SimpleNamespace(max_files_per_run=10)
-    assert _max_files(sample_ctx, source_cfg) == 10
+    assert _max_files(sample_runtime_cfg, source_cfg) == 10
 
 
-def test_max_files_defaults_to_runtime(sample_ctx: SimpleNamespace) -> None:
+def test_max_files_defaults_to_runtime(sample_runtime_cfg: SimpleNamespace) -> None:
     """_max_files falls back to runtime cap when source has no override."""
-    sample_ctx.runtime.max_files_per_run = 25
+    sample_runtime_cfg.max_files_per_run = 25
     source_cfg = SimpleNamespace()
-    assert _max_files(sample_ctx, source_cfg) == 25
+    assert _max_files(sample_runtime_cfg, source_cfg) == 25
 
 
 def test_run_source_empty_inbox(run_log, 
     sample_ctx: SimpleNamespace,
+    sample_app_cfg: SimpleNamespace,
+    sample_runtime_cfg: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
 ) -> None:
@@ -77,13 +79,16 @@ def test_run_source_empty_inbox(run_log,
     from rey_analyzer.runner import run_source
 
     success, failed, pending = run_source(
-        sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg
+        sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg,
+        app_cfg=sample_app_cfg, runtime_cfg=sample_runtime_cfg,
     )
     assert (success, failed, pending) == (0, 0, 0)
 
 
 def test_run_source_logs_input_discovery_count(run_log, 
     sample_ctx: SimpleNamespace,
+    sample_app_cfg: SimpleNamespace,
+    sample_runtime_cfg: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
     sample_jsonl_file: Path,
@@ -104,7 +109,8 @@ def test_run_source_logs_input_discovery_count(run_log,
 
     with patch("rey_analyzer.runner.run_analysis", return_value="success"):
         success, failed, pending = run_source(
-            sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg
+            sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg,
+            app_cfg=sample_app_cfg, runtime_cfg=sample_runtime_cfg,
         )
 
     assert (success, failed, pending) == (1, 0, 0)
@@ -123,6 +129,8 @@ def test_run_source_logs_input_discovery_count(run_log,
 
 def test_two_file_analyses_create_sibling_input_branches(run_log, 
     sample_ctx: SimpleNamespace,
+    sample_app_cfg: SimpleNamespace,
+    sample_runtime_cfg: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
     sample_jsonl_file: Path,
@@ -149,7 +157,9 @@ def test_two_file_analyses_create_sibling_input_branches(run_log,
     sample_source_cfg.move_files = False
 
     with patch("rey_analyzer.runner.build_request", side_effect=RuntimeError("stop")):
-        assert run_source(sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg) == (0, 2, 0)
+        assert run_source(sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg,
+                          app_cfg=sample_app_cfg,
+                          runtime_cfg=sample_runtime_cfg) == (0, 2, 0)
 
     records = [
         json.loads(line)
@@ -179,6 +189,8 @@ def test_two_file_analyses_create_sibling_input_branches(run_log,
 
 def test_run_analysis_moves_to_failed_on_exception(run_log, 
     sample_ctx: SimpleNamespace,
+    sample_app_cfg: SimpleNamespace,
+    sample_runtime_cfg: SimpleNamespace,
     sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace,
     sample_jsonl_file: Path,
@@ -199,7 +211,8 @@ def test_run_analysis_moves_to_failed_on_exception(run_log,
 
     with patch("rey_analyzer.runner.build_request", side_effect=Exception("boom")):
         status = run_analysis(
-            sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg, file_in_inbox
+            sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg, file_in_inbox,
+            app_cfg=sample_app_cfg,
         )
 
     assert status == "failed"

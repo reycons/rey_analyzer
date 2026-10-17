@@ -63,19 +63,31 @@ def sample_analysis_cfg() -> SimpleNamespace:
 
 
 @pytest.fixture()
-def sample_ctx(tmp_path: Path) -> SimpleNamespace:
-    """Minimal application context Namespace."""
-    app = SimpleNamespace(
+def sample_app_cfg(tmp_path: Path) -> SimpleNamespace:
+    """The process configuration section ``app`` a run is given (backlog 1005)."""
+    return SimpleNamespace(
         records_path   = str(tmp_path / "records"),
         artifacts_path = str(tmp_path / "artifacts"),
     )
-    runtime = SimpleNamespace(
+
+
+@pytest.fixture()
+def sample_runtime_cfg() -> SimpleNamespace:
+    """The process configuration section ``runtime`` a run is given (backlog 1005)."""
+    return SimpleNamespace(
         max_files_per_run = 25,
         stop_on_error     = False,
     )
+
+
+@pytest.fixture()
+def sample_ctx(tmp_path: Path) -> SimpleNamespace:
+    """Minimal application context Namespace.
+
+    It carries no app or runtime: those are the step's process configuration
+    sections (backlog 1005), given to the run as sample_app_cfg / sample_runtime_cfg.
+    """
     return SimpleNamespace(
-        app             = app,
-        runtime         = runtime,
         data_sources    = [],
         analysis_configs = [],
         llm_profiles    = [],

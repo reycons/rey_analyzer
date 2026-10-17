@@ -57,23 +57,29 @@ def test_analysis_hands_its_handler_every_argument_in_order(
 def test_analysis_takes_its_source_and_analysis_config_from_the_steps_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both are the process's configuration (#1043, #1005): asked of it, not of ctx."""
+    """All are the process's configuration (#1043, #1005): asked of it, not of ctx."""
     asked: list[tuple[str, str]] = []
     source = SimpleNamespace(name="proposals", analysis_config="infer")
     analysis = SimpleNamespace(name="infer")
+    sections = {"app": SimpleNamespace(artifacts_path="a"),
+                "runtime": SimpleNamespace(max_files_per_run=5)}
     process = SimpleNamespace(
         data_source=lambda name: asked.append(("data_source", name)) or source,
         analysis_config=lambda name: asked.append(("analysis_config", name)) or analysis,
+        config_section=lambda name: asked.append(("config_section", name)) or sections[name],
     )
     step = SimpleNamespace(process=process)
     received: list[Any] = []
     monkeypatch.setattr(workflow, "run_source", lambda _ctx, _log, source_cfg, analysis_cfg,
-                        **_kw: received.append((source_cfg, analysis_cfg)) or (1, 0, 0))
-    ctx = SimpleNamespace()  # no data_sources or analysis_configs: ctx is not read for them
+                        *, app_cfg, runtime_cfg, **_kw:
+                        received.append((source_cfg, analysis_cfg, app_cfg, runtime_cfg))
+                        or (1, 0, 0))
+    ctx = SimpleNamespace()  # no app, runtime or sources: ctx is not read for configuration
 
     result = get_registration()["approved_implementations"]["analysis"](
         ctx, object(), {"source": "proposals"}, SimpleNamespace(metadata={}), step)
 
-    assert asked == [("data_source", "proposals"), ("analysis_config", "infer")]
-    assert received == [(source, analysis)]
+    assert asked == [("data_source", "proposals"), ("analysis_config", "infer"),
+                     ("config_section", "app"), ("config_section", "runtime")]
+    assert received == [(source, analysis, sections["app"], sections["runtime"])]
     assert result.status == "ok"

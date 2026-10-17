@@ -45,21 +45,25 @@ class AnalyzerResultArtifacts:
     candidate_sha256: str | None
 
 
-def build_artifact_store(ctx: Any) -> LocalArtifactStore:
+def build_artifact_store(ctx: Any, app_cfg: Any) -> LocalArtifactStore:
     """
-    Build a LocalArtifactStore from the application context.
+    Build a LocalArtifactStore rooted at the process's artifacts path.
 
     Parameters
     ----------
     ctx : Any
-        Application context Namespace. Must have .app.artifacts_path.
+        The run context the store records written artifacts through; not a
+        configuration source.
+    app_cfg : Any
+        The step's process configuration section ``app`` (backlog 1005); its
+        ``artifacts_path`` roots the store.
 
     Returns
     -------
     LocalArtifactStore
-        Configured store rooted at ctx.app.artifacts_path.
+        Configured store rooted at the app section's artifacts path.
     """
-    artifacts_path = Path(ctx.app.artifacts_path).expanduser().resolve()
+    artifacts_path = Path(app_cfg.artifacts_path).expanduser().resolve()
     artifacts_path.mkdir(parents=True, exist_ok=True)
     # Pass the run context so each written LLM stage-result JSON is recorded as a
     # files/artifacts run-log artifact (SGC_Rey_Log_Writer_Run_View_Groups).

@@ -23,7 +23,8 @@ def _errors(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
 
 
 def test_a_failed_file_and_a_failed_move_are_each_their_own_error(
-    sample_ctx: SimpleNamespace, sample_source_cfg: SimpleNamespace,
+    sample_ctx: SimpleNamespace, sample_app_cfg: SimpleNamespace,
+    sample_source_cfg: SimpleNamespace,
     sample_analysis_cfg: SimpleNamespace, sample_jsonl_file: Path, tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -44,6 +45,7 @@ def test_a_failed_file_and_a_failed_move_are_each_their_own_error(
             caplog.at_level(logging.ERROR):
         status = run_analysis(
             sample_ctx, run_log, sample_source_cfg, sample_analysis_cfg, file_in_inbox,
+            app_cfg=sample_app_cfg,
         )
 
     assert status == "failed"
