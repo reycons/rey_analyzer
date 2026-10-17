@@ -54,23 +54,26 @@ def test_analysis_hands_its_handler_every_argument_in_order(
     assert seen == [(ctx, run_log, config, run, step)]
 
 
-def test_analysis_takes_its_data_source_from_the_steps_process(
+def test_analysis_takes_its_source_and_analysis_config_from_the_steps_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The data source is the process's configuration (#1043): asked of it, not of ctx."""
-    asked: list[str] = []
+    """Both are the process's configuration (#1043, #1005): asked of it, not of ctx."""
+    asked: list[tuple[str, str]] = []
     source = SimpleNamespace(name="proposals", analysis_config="infer")
-    process = SimpleNamespace(data_source=lambda name: asked.append(name) or source)
+    analysis = SimpleNamespace(name="infer")
+    process = SimpleNamespace(
+        data_source=lambda name: asked.append(("data_source", name)) or source,
+        analysis_config=lambda name: asked.append(("analysis_config", name)) or analysis,
+    )
     step = SimpleNamespace(process=process)
     received: list[Any] = []
-    monkeypatch.setattr(workflow, "_resolve_analysis", lambda _ctx, name: f"analysis:{name}")
     monkeypatch.setattr(workflow, "run_source", lambda _ctx, _log, source_cfg, analysis_cfg,
                         **_kw: received.append((source_cfg, analysis_cfg)) or (1, 0, 0))
-    ctx = SimpleNamespace()  # no data_sources: nothing is read from the context
+    ctx = SimpleNamespace()  # no data_sources or analysis_configs: ctx is not read for them
 
     result = get_registration()["approved_implementations"]["analysis"](
         ctx, object(), {"source": "proposals"}, SimpleNamespace(metadata={}), step)
 
-    assert asked == ["proposals"]
-    assert received == [(source, "analysis:infer")]
+    assert asked == [("data_source", "proposals"), ("analysis_config", "infer")]
+    assert received == [(source, analysis)]
     assert result.status == "ok"

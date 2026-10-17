@@ -16,11 +16,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from rey_lib.config.ctx import find_in_ctx
 from rey_lib.logs import AppLogger
 from rey_lib.workflow import RunContext, StepResult
 
-from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
+from rey_analyzer.error_utils import AnalyzerError
 from rey_analyzer.runner import run_source
 
 __all__ = ["build_process_registry"]
@@ -60,15 +59,15 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
     ``source`` is the step-config data-source name. The data source is part of
     the step's process's governed configuration (backlogs 1032, 1043): the
     step's own WorkflowProcess holds it, hydrated with the workflow's paths. Its
-    config names its analysis config. A non-zero
-    failed count fails the step (fail-closed).
+    config names its analysis config, which the same process holds (backlog
+    1005). A non-zero failed count fails the step (fail-closed).
     """
     source_name = str(_get(config, "source", "") or "")
     if not source_name:
         raise AnalyzerError("workflow 'analysis' step is missing required config 'source'.")
 
     source_cfg = step.process.data_source(source_name)
-    analysis_cfg = _resolve_analysis(ctx, source_cfg.analysis_config)
+    analysis_cfg = step.process.analysis_config(source_cfg.analysis_config)
     success, failed, pending = run_source(ctx, run_log,
         source_cfg,
         analysis_cfg,
@@ -82,21 +81,6 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
     if failed:
         return StepResult(source_name, "failed", detail)
     return StepResult(source_name, "ok", detail)
-
-
-# ---------------------------------------------------------------------------
-# Config resolution
-# ---------------------------------------------------------------------------
-
-def _resolve_analysis(ctx: Any, name: str) -> Any:
-    """Look up an analysis config by name or raise ConfigurationError."""
-    cfg = find_in_ctx(ctx, "analysis_configs", name)
-    if cfg is None:
-        raise ConfigurationError(
-            f"analysis_config '{name}' not found. "
-            f"Check config/app/analysis_configs.yaml."
-        )
-    return cfg
 
 
 # ---------------------------------------------------------------------------
