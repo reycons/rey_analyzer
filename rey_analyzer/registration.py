@@ -101,42 +101,6 @@ CLI: dict[str, Any] = {   'shared_parameters': [   {   'name': 'config-path',
                                                                      'loader_config_to_staging_ddl',
                                                                      'loader_config_to_staging_view',
                                                                      'rey_loader_logs']}]},
-                    {   'name': 'run-workflow',
-                        'description': 'Run a configured analyzer '
-                                       'workflow.',
-                        'parameters': [   {   'name': 'workflow',
-                                              'required': True,
-                                              'value_type': 'string',
-                                              'description': 'Workflow '
-                                                             'name under '
-                                                             "'workflows' "
-                                                             'in '
-                                                             'rey_analyzer '
-                                                             'config.'},
-                                          {   'name': 'step',
-                                              'required': False,
-                                              'value_type': 'string',
-                                              'description': 'Run only the '
-                                                             'one matching '
-                                                             'step.'},
-                                          {   'name': 'from-step',
-                                              'required': False,
-                                              'value_type': 'string',
-                                              'description': 'Run from the '
-                                                             'matching '
-                                                             'step through '
-                                                             'the end of '
-                                                             'the '
-                                                             'workflow.'},
-                                          {   'name': 'to-step',
-                                              'required': False,
-                                              'value_type': 'string',
-                                              'description': 'Run from the '
-                                                             'start of the '
-                                                             'workflow '
-                                                             'through the '
-                                                             'matching '
-                                                             'step.'}]},
                     {   'name': 'submit-file',
                         'description': 'Submit one file for analysis.',
                         'parameters': [   {   'name': 'source',

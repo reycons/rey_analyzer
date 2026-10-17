@@ -2,8 +2,7 @@
 
 A source or file failure the runner consumes and continues past is reported
 there as the canonical AppError; a failure that propagates is not reported
-locally. A failed workflow is status here: its step belongs to rey_lib's
-workflow, and the operation's outcome to run_app_operation.
+locally.
 """
 
 from __future__ import annotations
@@ -93,21 +92,3 @@ def test_a_failed_file_and_a_failed_move_are_each_their_own_error(
     assert type(movement.exc_info[1]) is FileMovementError
     assert movement.exc_info[1].__cause__ is move_failure
 
-
-def test_a_failed_workflow_is_status_and_returns_nonzero(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    from rey_analyzer import workflow
-
-    failed_run = SimpleNamespace(
-        status="failed", outcomes=[SimpleNamespace(status="failed", id="s1")],
-    )
-    with patch.object(workflow, "_get_workflow", return_value=SimpleNamespace()), \
-            patch.object(workflow, "coordinate_workflow", return_value=failed_run), \
-            patch.object(workflow, "build_process_registry", return_value={}), \
-            caplog.at_level(logging.WARNING):
-        assert workflow.run_process_workflow(SimpleNamespace(), "wf") == 1
-
-    assert _errors(caplog) == []
-    (warning,) = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert "failed at step: s1" in warning.getMessage()

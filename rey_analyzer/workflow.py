@@ -1,20 +1,15 @@
 """
-rey_analyzer workflows — process registry, handler, and runner.
+rey_analyzer workflow operation -- the approved implementation catalog and its handler.
 
-Ownership: the shared coordinator (``rey_lib.workflow.run_workflow``) owns all
-workflow execution mechanics (sequencing, step/range selection, fail-closed
-behaviour, dry-run/apply propagation, run context, outcomes). This module owns
-only the analyzer domain: the process *registry* and the single *handler* that
-wraps the existing, unchanged ``run_source`` analyzer function.
-
-This is an orchestration refactor only — the handler calls the existing analyzer
-function as-is. No analysis behaviour, output, config semantics, or
-success/failure rules change here.
+The canonical Workflow (rey_lib.workflow) binds each WorkflowStep to an
+implementation this application approves (``build_process_registry``, published
+on the registration as ``approved_implementations``) and runs it through the
+step's Run. The one handler wraps the existing ``run_source`` analyzer function.
+This module runs no workflow itself.
 
 Public API
 ----------
-build_process_registry  process name -> handler for the shared coordinator.
-run_process_workflow    Run one ordered workflow pass through the coordinator.
+build_process_registry  operation name -> approved implementation.
 """
 
 from __future__ import annotations
@@ -23,26 +18,14 @@ from typing import Any
 
 from rey_lib.config.ctx import find_in_ctx
 from rey_lib.logs import AppLogger
-from rey_lib.workflow import (
-    RunContext,
-    StepResult,
-    run_workflow as coordinate_workflow,
-)
+from rey_lib.workflow import RunContext, StepResult
 
 from rey_analyzer.error_utils import AnalyzerError, ConfigurationError
 from rey_analyzer.runner import run_source
 
-__all__ = [
-    "build_process_registry",
-    "run_process_workflow",
-]
+__all__ = ["build_process_registry"]
 
 _logger = AppLogger(__name__)
-
-# This app's identity. Workflow ownership is ``app + name``; rey_analyzer consumes
-# only workflows assigned to itself from the resolved ctx (never another app's).
-APP_NAME = "rey_analyzer"
-
 
 # ---------------------------------------------------------------------------
 # Process registry (process name -> handler)
@@ -56,8 +39,8 @@ def build_process_registry() -> dict[str, Any]:
     workflow's declaration. Every key here is published in this application's
     registration, and the engine refuses a workflow naming anything else.
 
-    Each implementation takes the canonical WorkflowStep as an optional last
-    argument (Run.execute passes it); the legacy coordinator passes none.
+    Each implementation takes the canonical WorkflowStep as its last argument
+    (Run.execute passes it).
     """
     def analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunContext,
                  step: Any = None) -> StepResult:
@@ -99,54 +82,6 @@ def _process_analysis(ctx: Any, run_log: Any, config: dict[str, Any], run: RunCo
 
 
 # ---------------------------------------------------------------------------
-# Runner (delegates sequencing to the shared workflow coordinator)
-# ---------------------------------------------------------------------------
-
-def run_process_workflow(
-    ctx: Any,
-    workflow_name: str,
-    *,
-    apply: bool = True,
-    step: str | None = None,
-    from_step: str | None = None,
-    to_step: str | None = None,
-) -> int:
-    """Execute one ordered analyzer workflow pass through the shared coordinator.
-
-    Resolves and ownership-checks the workflow from ctx, seeds run metadata, then
-    dispatches its steps through the shared coordinator against this app's process
-    registry. ``step`` / ``from_step`` / ``to_step`` are thin pass-throughs for
-    single-step and range execution; selection semantics are owned by
-    rey_lib.workflow, not this app. Returns 0 / 1.
-    """
-    wf = _get_workflow(ctx, workflow_name)
-    metadata = {
-        "workflow": workflow_name,
-        "mode": "apply" if apply else "dry-run",
-    }
-    run = coordinate_workflow(
-        ctx,
-        wf,
-        build_process_registry(),
-        apply=apply,
-        step=step,
-        from_step=from_step,
-        to_step=to_step,
-        metadata=metadata,
-    )
-    if run.status != "success":
-        failed = next((o for o in run.outcomes if o.status == "failed"), None)
-        # Status: the workflow owns its failed step and reported it; this
-        # operation's failed outcome is run_app_operation's to report (rule 79).
-        _logger.warning("workflow '%s' failed at step: %s",
-                        workflow_name, failed.id if failed else "?")
-        return 1
-    _logger.info("workflow '%s' complete (%s).",
-                 workflow_name, "apply" if apply else "dry-run")
-    return 0
-
-
-# ---------------------------------------------------------------------------
 # Config resolution (same lookups the run-source command uses)
 # ---------------------------------------------------------------------------
 
@@ -172,46 +107,8 @@ def _resolve_analysis(ctx: Any, name: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Ownership + access helpers
+# Access helper
 # ---------------------------------------------------------------------------
-
-def _get_workflow(ctx: Any, name: str) -> Any:
-    """Return the named workflow config from the resolved ctx, or raise.
-
-    Consumes ``ctx.workflows`` only — no filesystem discovery — and enforces
-    ownership before returning: a workflow assigned to another app is refused,
-    so rey_analyzer can never run a workflow it does not own.
-    """
-    workflows = getattr(ctx, "workflows", None)
-    wf = None
-    if isinstance(workflows, list):
-        for item in workflows:
-            if str(_get(item, "name", "")) == name:
-                wf = item
-                break
-    elif workflows is not None:
-        wf = _get(workflows, name)
-    if wf is None:
-        raise AnalyzerError(
-            f"workflow '{name}' not found in rey_analyzer config (ctx.workflows)."
-        )
-    _enforce_ownership(wf, name)
-    return wf
-
-
-def _enforce_ownership(wf: Any, name: str) -> None:
-    """Refuse a workflow owned by another app (fail-closed on mismatch).
-
-    Ownership is the resolved workflow's ``app`` property, stamped during ctx
-    construction. An empty owner is treated as this app's; a foreign owner raises.
-    """
-    owner = str(_get(wf, "app", "") or "")
-    if owner and owner != APP_NAME:
-        raise AnalyzerError(
-            f"Workflow {name} is assigned to {owner} and cannot be executed "
-            f"by {APP_NAME}."
-        )
-
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
     """Return obj[key] / obj.key, or default."""
