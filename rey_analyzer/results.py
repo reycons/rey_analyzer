@@ -20,10 +20,12 @@ from pathlib import Path
 from typing import Any
 
 from rey_lib.encryption import sha256_file
-from rey_lib.files.file_utils import run_artifact_path, write_file
+from rey_lib.files.data_file import DataFile
+from rey_lib.files.file import File
+from rey_lib.files.file_utils import run_artifact_path
 from rey_lib.artifacts import LocalArtifactStore
 from rey_lib.analysis import AnalysisResult
-from rey_lib.logs import AppLogger, log_artifact_reference
+from rey_lib.logs import AppLogger, log_artifact_reference, record_file_write
 
 from rey_analyzer.requests import AnalysisRequest
 from rey_analyzer.error_utils import AnalyzerError
@@ -134,7 +136,9 @@ def write_result(
         "result.json",
     )
     _state = {"state_ctx": ctx, "app": "rey_analyzer", "pipeline": getattr(ctx, "pipeline_name", None) if ctx else None, "reason": "analyzed"}
-    write_file(result_file, record, file_type="JSON", **_state)
+    DataFile.for_path(result_file, file_type="JSON").write(
+        record, sort_keys=False, atomic=False, trailing_newline=False)
+    record_file_write(result_file, **_state)
 
     candidate_file: Path | None = None
     if result.status == "success" and analysis_cfg is not None:
@@ -180,7 +184,9 @@ def write_result(
         "status": result.status,
         "errors": result.errors,
     }
-    write_file(context_file, context, file_type="JSON", **_state)
+    DataFile.for_path(context_file, file_type="JSON").write(
+        context, sort_keys=False, atomic=False, trailing_newline=False)
+    record_file_write(context_file, **_state)
 
     # The analysis result JSON is a run-created output; record it as an artifact on
     # the append-only run log (SGC_Rey_Log_Writer_Run_View_Groups) when a run context
@@ -262,7 +268,8 @@ def _write_raw_output(
     raw_file = raw_dir / f"{stem}{ext}"
 
     raw_text = result.raw_text or ""
-    write_file(raw_file, raw_text, file_type="TEXT", state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None) if ctx else None, reason="raw_output")
+    File.for_path(raw_file).write_text(raw_text)
+    record_file_write(raw_file, state_ctx=ctx, app="rey_analyzer", pipeline=getattr(ctx, "pipeline_name", None) if ctx else None, reason="raw_output")
 
     # Raw LLM output is a run-created artifact used for pipeline chaining.
     if ctx is not None:
