@@ -60,7 +60,7 @@ def main() -> int:
     # when this block exits, collects the shared runtime objects it
     # created. It encloses everything below, so any existing finalization
     # runs while those objects are still live and collection happens after.
-    with app_runtime(ctx=ctx, operation=args.command) as (ctx, run_log):
+    with app_runtime(ctx=ctx, operation=args.command, on_terminate="ABORTED") as (ctx, run_log):
         log = AppLogger(__name__)
         log.info("rey_analyzer starting — command=%s", args.command)
 
