@@ -264,7 +264,7 @@ def test_change_3_request_id_differs_from_the_v01_era(contract, tmp_path: Path) 
     )
 
     request = build_request(
-        SimpleNamespace(name="file_operator"), analysis_cfg, analysed,
+        SimpleNamespace(name="data_engine"), analysis_cfg, analysed,
         ctx=SimpleNamespace(shared_control=control),
     )
 
