@@ -17,11 +17,7 @@ from types import SimpleNamespace
 import jsonschema
 import pytest
 
-from rey_lib.ai import AI, AIProfile, AIRegistry, AISettings, EchoProvider
 from rey_lib.analysis import parse_analysis_contract
-from rey_lib.analysis.api import RunRequest
-from rey_lib.analysis.execution import run
-from rey_lib.analysis.records import STATUS_SUCCESS
 from rey_lib.encryption import sha256_text
 
 from rey_analyzer.requests import _compute_request_id, build_request
@@ -206,41 +202,9 @@ def test_the_embedded_schema_is_the_former_sidecar(schema: dict[str, object]) ->
 
 
 # ---------------------------------------------------------------------------
-# The four intended behaviour changes of v02 (backlog 903)
+# The intended behaviour changes of v02 (backlog 903) that do not execute the
+# contract. Executing it ran on the legacy AI, removed by #1025 (#1283).
 # ---------------------------------------------------------------------------
-
-def _runtime(reply: str, value: object = None) -> AI:
-    """One AI runtime answering with a fixed reply."""
-    return AI(
-        registry=AIRegistry(
-            profiles=(AIProfile(id="mock", provider="echo", model="m"),),
-            providers=(EchoProvider(reply_with=reply, value=value),),
-        ),
-        settings=AISettings(profile_id="mock"),
-    )
-
-
-def _stage(contract) -> RunRequest:
-    return RunRequest(
-        pipeline_id="rey_analyzer", stage_id=contract.name,
-        contract=contract.base, input_data="{}", profile_id="mock",
-        output_schema=contract.spec.output_schema,
-    )
-
-
-def test_change_1_runtime_output_validation_now_occurs(contract) -> None:
-    """The embedded schema is enforced: a strict candidate passes, others fail."""
-    accepted = run(_stage(contract), _runtime(json.dumps(_candidate()), value=_candidate()))
-    assert accepted.status == STATUS_SUCCESS
-
-    prose = run(_stage(contract), _runtime("The file contains one table."))
-    assert prose.status != STATUS_SUCCESS
-
-    ambiguous = _candidate()
-    ambiguous["unresolved_ambiguities"] = ["Two boundary rows are plausible."]
-    refused = run(_stage(contract), _runtime(json.dumps(ambiguous), value=ambiguous))
-    assert refused.status != STATUS_SUCCESS
-
 
 def test_change_2_contract_hash_is_the_v02_text(contract) -> None:
     assert contract.hash == sha256_text(_v02_text())
@@ -275,12 +239,3 @@ def test_change_3_request_id_differs_from_the_v01_era(contract, tmp_path: Path) 
     assert request.request_id != _compute_request_id(
         request.input_hash, V01_CONTRACT_SHA256, V01_SIDECAR_SHA256,
     )
-
-
-def test_change_4_execution_schema_hash_is_the_enforced_schema(contract) -> None:
-    response = run(_stage(contract), _runtime(json.dumps(_candidate()), value=_candidate()))
-
-    expected = sha256_text(json.dumps(contract.spec.output_schema, sort_keys=True))
-    assert response.record is not None
-    assert response.record.schema_hash == expected
-    assert response.record.schema_hash != sha256_text("")

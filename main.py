@@ -77,7 +77,7 @@ def main() -> int:
             # The top-level owner explicitly creates the RESULTS_SUMMARY after its
             # final RUN_COMPLETE — on success or failure
             # (SGC_Rey_Lib_Explicit_Results_Summary_Creation).
-            finalize_run_log(run_log, ai=getattr(ctx, "shared_ai", None))
+            finalize_run_log(run_log)
 
 
 def _execute_command(ctx: Any, run_log, args: argparse.Namespace, log: Any) -> int:
