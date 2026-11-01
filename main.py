@@ -103,7 +103,8 @@ def _cmd_status(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Print the status of a past run by run_id."""
     from rey_lib.analysis import load_latest_record  # noqa: PLC0415
 
-    records_path = Path(ctx.app.records_path).expanduser().resolve()
+    from rey_lib.config.applications import configured_application
+    records_path = Path(configured_application(ctx, "rey_analyzer").settings["app"]["records_path"]).expanduser().resolve()
     record = load_latest_record(records_path, args.run_id)
     if record is None:
         log.warning("No record found for run_id=%s", args.run_id)
@@ -115,7 +116,8 @@ def _cmd_approve(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Approve a pending-approval run and move its file to success."""
     from rey_lib.analysis import approve, load_latest_record, store_record  # noqa: PLC0415
 
-    records_path = Path(ctx.app.records_path).expanduser().resolve()
+    from rey_lib.config.applications import configured_application
+    records_path = Path(configured_application(ctx, "rey_analyzer").settings["app"]["records_path"]).expanduser().resolve()
     record = load_latest_record(records_path, args.run_id)
     if record is None:
         raise ConfigurationError(f"No record found for run_id={args.run_id}")
@@ -129,7 +131,8 @@ def _cmd_reject(ctx: Any, args: argparse.Namespace, log: Any) -> None:
     """Reject a pending-approval run and move its file to failed."""
     from rey_lib.analysis import load_latest_record, reject, store_record  # noqa: PLC0415
 
-    records_path = Path(ctx.app.records_path).expanduser().resolve()
+    from rey_lib.config.applications import configured_application
+    records_path = Path(configured_application(ctx, "rey_analyzer").settings["app"]["records_path"]).expanduser().resolve()
     record = load_latest_record(records_path, args.run_id)
     if record is None:
         raise ConfigurationError(f"No record found for run_id={args.run_id}")
