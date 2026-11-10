@@ -1,0 +1,7 @@
+rey_analyzer retired under #1287.
+
+The legacy executor and its installed registration were removed. Its two obsolete inference workflows remain disabled in the database for history. Live inventory/preparation remains hosted by data_engine, with staging declarations on its existing DB workflow steps. Shared rey_lib.analysis and historical data remain available.
+
+Other environments must uninstall the old distribution before updating source:
+  python -m pip uninstall rey_analyzer
+The canonical AI execution host is ai_app; this retirement does not introduce an AI execution step into file preparation.
